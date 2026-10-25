@@ -6,17 +6,18 @@
     <title>Agenda Médica & Apuração de Plantões - Pokulai</title>
 
     <script>
-        if (localStorage.getItem('pokulai_theme') === 'dark' || (!('pokulai_theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
+        (function () {
+            let theme = null;
+            try { theme = localStorage.getItem('pokulai_theme'); } catch (e) { /* armazenamento bloqueado */ }
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.classList.toggle('dark', theme === 'dark' || (theme === null && prefersDark));
+        })();
     </script>
 
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.5"></script>
     <script>
-        tailwind.config = {
+        if (window.tailwind) tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
@@ -42,13 +43,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <!-- Supabase JS Client v2 -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase JS Client v2 (versão fixada) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 
     <style>
         .calendar-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr);
+            grid-template-columns: repeat(7, minmax(0, 1fr));
             grid-auto-rows: minmax(130px, 1fr);
             gap: 1px;
             background-color: #e2e8f0;
@@ -58,7 +59,7 @@
             background-color: #374151;
             border-color: #374151;
         }
-        .calendar-day { background-color: white; padding: 0.5rem; }
+        .calendar-day { background-color: white; padding: 0.5rem; min-width: 0; }
         html.dark .calendar-day { background-color: #1f2937; }
         .day-header { text-align: center; font-weight: 600; padding: 0.5rem; background-color: #f1f5f9; }
         html.dark .day-header { background-color: #111827; color: #d1d5db; }
@@ -66,7 +67,7 @@
         .editable-sidebar { cursor: text; border-bottom: 1px dashed rgba(156, 163, 175, 0.5); outline: none; transition: all 0.2s; padding: 2px 4px; border-radius: 4px; }
         .editable-sidebar:focus { background-color: rgba(0,0,0,0.05); border-bottom-color: #0F766E; }
         html.dark .editable-sidebar:focus { background-color: rgba(255,255,255,0.1); }
-        .text-dark-override { color: #111827 !important; }
+        .text-dark-override, .text-dark-override * { color: #111827 !important; }
 
         .prof-selected { border-left: 4px solid #0F766E; background-color: rgba(15, 118, 110, 0.05); }
         html.dark .prof-selected { background-color: rgba(15, 118, 110, 0.2); }
@@ -76,16 +77,16 @@
         #main-sidebar.collapsed { width: 0; opacity: 0; overflow: hidden; border-right: none; }
 
         .export-menu { display: none; bottom: 100%; right: 0; margin-bottom: 0.5rem; }
-        .export-btn-group:hover .export-menu { display: flex; flex-direction: column; }
+        .export-btn-group:hover .export-menu, .export-btn-group.open .export-menu { display: flex; flex-direction: column; }
     </style>
 </head>
 <body class="bg-pokulai-background dark:bg-gray-900 h-screen flex overflow-hidden font-sans relative transition-colors duration-200 text-gray-800 dark:text-gray-100">
 
-    <input type="file" id="chat-attachment" class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg">
+    <input type="file" id="chat-attachment" class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" onchange="handleAttachment(this)">
 
     <!-- SIDEBAR -->
-    <aside id="main-sidebar" class="w-96 flex-shrink-0 bg-white dark:bg-pokulai-sidebar border-r border-gray-200 dark:border-gray-700 shadow-lg flex flex-col h-full overflow-y-auto transition-colors duration-200 z-20">
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 flex items-center justify-between sticky top-0 z-10 w-96">
+    <aside id="main-sidebar" class="w-96 max-w-full flex-shrink-0 bg-white dark:bg-pokulai-sidebar border-r border-gray-200 dark:border-gray-700 shadow-lg flex flex-col h-full overflow-y-auto transition-colors duration-200 z-20">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 flex items-center justify-between sticky top-0 z-10 w-96 max-w-[100vw]">
             <h1 class="text-xl font-bold tracking-wide dark:text-white text-gray-800 whitespace-nowrap"><i class="fas fa-stethoscope mr-2 text-pokulai-accent"></i> POKULAI</h1>
             <button onclick="openConfigModal()" class="text-xs text-gray-500 hover:text-pokulai-brand dark:text-gray-400 p-1" title="Configurar Supabase & MFA">
                 <i class="fas fa-cog text-base"></i>
@@ -93,20 +94,20 @@
         </div>
 
         <!-- Bloco de Autenticação (Supabase & Simulação) -->
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 transition-colors w-96">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 transition-colors w-96 max-w-[100vw]">
             <div id="login-form-container">
                 <div class="flex items-center justify-between mb-2">
                     <h3 class="text-[10px] font-bold text-gray-500 uppercase"><i class="fas fa-shield-alt mr-1 text-emerald-600"></i> Autenticação Supabase</h3>
                     <span id="supabase-status-badge" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Modo Local</span>
                 </div>
-                <input type="text" id="login-user" placeholder="E-mail ou 'admin'" class="w-full mb-2 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:border-pokulai-brand">
-                <input type="password" id="login-pass" placeholder="Senha" class="w-full mb-2 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:border-pokulai-brand">
+                <input type="text" id="login-user" placeholder="E-mail ou 'admin'" autocomplete="username" class="w-full mb-2 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:border-pokulai-brand">
+                <input type="password" id="login-pass" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter') handleLogin()" class="w-full mb-2 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:border-pokulai-brand">
 
                 <div class="flex space-x-2 mb-2">
-                    <button onclick="handleLogin()" class="flex-1 bg-pokulai-brand text-white p-2 rounded text-xs font-bold hover:bg-teal-600 transition-colors shadow-sm">Entrar</button>
+                    <button id="btn-login" onclick="handleLogin()" class="flex-1 bg-pokulai-brand text-white p-2 rounded text-xs font-bold hover:bg-teal-600 transition-colors shadow-sm">Entrar</button>
                     <button onclick="handleSignUp()" class="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 p-2 rounded text-xs font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cadastrar</button>
                 </div>
-                <p class="text-[10px] text-gray-500 text-center">Para testar sem chave Supabase, digite 'admin' ou seu nome e clique em Entrar.</p>
+                <p id="login-hint" class="text-[10px] text-gray-500 text-center">Modo local (sem segurança real): digite 'admin' ou o nome do profissional e clique em Entrar.</p>
             </div>
 
             <div id="logged-in-container" class="hidden flex-col">
@@ -135,7 +136,7 @@
             </div>
         </div>
 
-        <div id="sidebar-main-content" class="flex-1 flex flex-col w-96">
+        <div id="sidebar-main-content" class="flex-1 flex flex-col w-96 max-w-[100vw]">
             <div class="p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-700">
                 <h2 class="text-gray-500 dark:text-gray-400 uppercase text-[10px] font-bold">Gestão de Plantões / Exames</h2>
                 <button onclick="addNewLocation()" class="bg-pokulai-brand hover:bg-teal-600 text-white px-2 py-1 rounded text-xs shadow-sm transition-colors"><i class="fas fa-plus mr-1"></i> Local</button>
@@ -150,25 +151,26 @@
     </aside>
 
     <!-- ÁREA PRINCIPAL -->
-    <main class="flex-1 flex flex-col h-full overflow-hidden relative">
-        <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between shadow-sm transition-colors duration-200 z-30 flex-shrink-0">
-            <div class="flex items-center space-x-4">
+    <main class="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
+        <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-3 md:px-6 py-4 flex items-center justify-between shadow-sm transition-colors duration-200 z-30 flex-shrink-0">
+            <div class="flex items-center space-x-2 md:space-x-4 min-w-0">
                 <button onclick="toggleSidebar()" class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Ocultar/Mostrar Menu Lateral">
                     <i class="fas fa-bars text-gray-600 dark:text-gray-300 text-xl"></i>
                 </button>
-                <div class="flex items-center space-x-2">
-                    <button onclick="changeMonth(-1)" class="p-1 text-gray-500 hover:text-pokulai-brand"><i class="fas fa-chevron-left"></i></button>
-                    <h2 class="text-2xl font-semibold text-gray-800 dark:text-white" id="current-month-display">Outubro 2026</h2>
-                    <button onclick="changeMonth(1)" class="p-1 text-gray-500 hover:text-pokulai-brand"><i class="fas fa-chevron-right"></i></button>
+                <div class="flex items-center space-x-2 min-w-0">
+                    <button onclick="changeMonth(-1)" class="p-1 text-gray-500 hover:text-pokulai-brand" title="Mês anterior"><i class="fas fa-chevron-left"></i></button>
+                    <h2 class="text-lg md:text-2xl font-semibold text-gray-800 dark:text-white whitespace-nowrap" id="current-month-display"></h2>
+                    <button onclick="changeMonth(1)" class="p-1 text-gray-500 hover:text-pokulai-brand" title="Próximo mês"><i class="fas fa-chevron-right"></i></button>
+                    <button onclick="goToToday()" class="hidden sm:inline-block text-[11px] px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-pokulai-brand">Hoje</button>
                 </div>
                 <div id="current-view-badge" class="hidden md:flex items-center text-xs font-bold text-pokulai-brand dark:text-pokulai-accent bg-teal-50 dark:bg-teal-900/30 px-3 py-1.5 rounded-full border border-teal-100 dark:border-teal-800">
-                    <i class="fas fa-calendar-check mr-2"></i> Agenda: <span id="current-view-name" class="ml-1">Dr. Enrique</span>
+                    <i class="fas fa-calendar-check mr-2"></i> Agenda: <span id="current-view-name" class="ml-1"></span>
                 </div>
             </div>
 
             <div class="flex items-center space-x-3">
                 <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Alternar Tema Claro/Escuro">
-                    <i id="theme-icon" class="fas fa-moon text-gray-500 dark:text-yellow-400 text-xl"></i>
+                    <i id="theme-icon" class="fas fa-moon text-gray-500 text-xl"></i>
                 </button>
                 <button onclick="toggleFullScreen()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Tela Cheia">
                     <i id="fullscreen-icon" class="fas fa-expand text-gray-500 dark:text-gray-400 text-xl"></i>
@@ -177,7 +179,7 @@
         </header>
 
         <!-- Grade do Calendário -->
-        <div class="flex-1 flex flex-col p-4 overflow-hidden relative">
+        <div class="flex-1 flex flex-col p-2 md:p-4 overflow-hidden relative">
             <div class="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors duration-200 relative">
                 <div class="flex-1 flex flex-col overflow-y-auto relative">
                     <div class="sticky top-0 z-20 grid grid-cols-7 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 text-sm shadow-sm flex-shrink-0">
@@ -189,13 +191,13 @@
         </div>
 
         <!-- Barra inferior de NLP -->
-        <div class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 px-6 flex items-center shadow-lg z-30 transition-colors duration-200 flex-shrink-0">
+        <div class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 px-3 md:px-6 flex items-center shadow-lg z-30 transition-colors duration-200 flex-shrink-0">
             <button onclick="document.getElementById('chat-attachment').click()" class="text-gray-400 hover:text-pokulai-brand dark:hover:text-pokulai-accent transition-colors mr-4 focus:outline-none" title="Anexar arquivo ou foto">
                 <i class="fas fa-plus-circle text-2xl"></i>
             </button>
-            <div class="flex-1 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center px-4 py-2 border border-gray-300 dark:border-gray-700">
-                <input type="text" id="nlp-text-input" placeholder="Digite o comando... Ex: Agendar Dra. Maria dia 5 de outubro em Planalto das 19 as 7" class="flex-1 bg-transparent border-none focus:outline-none text-gray-700 dark:text-gray-200 text-sm" onkeypress="handleTextCommandSubmit(event)">
-                <button onclick="processTextInput()" class="text-pokulai-brand dark:text-pokulai-accent ml-2 hover:opacity-80 focus:outline-none">
+            <div class="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center px-4 py-2 border border-gray-300 dark:border-gray-700">
+                <input type="text" id="nlp-text-input" maxlength="500" placeholder="Digite o comando... Ex: Agendar Dra. Maria dia 5 de outubro em Planalto das 19 as 7" class="flex-1 min-w-0 bg-transparent border-none focus:outline-none text-gray-700 dark:text-gray-200 text-sm" onkeydown="handleTextCommandSubmit(event)">
+                <button onclick="processTextInput()" class="text-pokulai-brand dark:text-pokulai-accent ml-2 hover:opacity-80 focus:outline-none" title="Enviar comando">
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </div>
@@ -204,10 +206,10 @@
         <!-- GRUPO DE BOTÕES FLUTUANTES (FAB) NO CANTO INFERIOR DIREITO -->
         <div class="absolute bottom-24 right-6 flex flex-col items-center space-y-4 z-50">
             <!-- 1. Botão IA de Rastreamento e Apuração de Plantões -->
-            <button id="fab-ai-shifts" onclick="openShiftTrackerModal()" class="w-14 h-14 bg-gradient-to-tr from-cyan-600 to-teal-500 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform border-2 border-white dark:border-gray-800 relative group" title="IA Apuração de Plantões & Relatório">
+            <button id="fab-ai-shifts" onclick="openShiftTrackerModal()" class="w-14 h-14 bg-gradient-to-tr from-cyan-600 to-teal-500 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform border-2 border-white dark:border-gray-800 relative group" title="Apuração de Plantões & Relatório">
                 <i class="fas fa-brain text-xl"></i>
                 <span class="absolute right-16 bg-gray-900 text-white text-xs px-2.5 py-1 rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                    Rastrear Plantões (IA)
+                    Apurar Plantões
                 </span>
             </button>
 
@@ -216,14 +218,14 @@
                 <i class="fas fa-microphone text-xl"></i>
             </button>
 
-            <!-- 3. Exportar -->
-            <div class="relative export-btn-group">
+            <!-- 3. Exportar (hover no desktop, toque/clique no celular) -->
+            <div class="relative export-btn-group" id="export-group">
                 <div class="export-menu absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden text-sm">
                     <button onclick="exportToExcel()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-green-600 font-bold whitespace-nowrap"><i class="fas fa-file-excel mr-2"></i> Exportar Excel</button>
                     <button onclick="exportToWord()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 font-bold whitespace-nowrap border-y border-gray-100 dark:border-gray-700"><i class="fas fa-file-word mr-2"></i> Exportar Word</button>
                     <button onclick="exportToPDF()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 font-bold whitespace-nowrap"><i class="fas fa-file-pdf mr-2"></i> Exportar PDF Padrão</button>
                 </div>
-                <button class="w-14 h-14 bg-gray-800 dark:bg-gray-700 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border-2 border-white dark:border-gray-800" title="Exportar Relatórios">
+                <button onclick="toggleExportMenu(event)" class="w-14 h-14 bg-gray-800 dark:bg-gray-700 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border-2 border-white dark:border-gray-800" title="Exportar Relatórios do mês exibido">
                     <i class="fas fa-download text-xl"></i>
                 </button>
             </div>
@@ -240,7 +242,7 @@
                         <i class="fas fa-robot"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-lg">Inteligência de Apuração de Plantões</h3>
+                        <h3 class="font-bold text-lg">Apuração de Plantões</h3>
                         <p class="text-xs text-teal-200">Filtro exclusivo para escalas de plantão hospitalar (desconsidera exames e outros compromissos)</p>
                     </div>
                 </div>
@@ -261,12 +263,12 @@
                         <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Mês / Ano</label>
                         <div class="flex space-x-2">
                             <select id="ai-filter-month" onchange="runShiftAudit()" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs"></select>
-                            <input type="number" id="ai-filter-year" value="2026" onchange="runShiftAudit()" class="w-20 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs text-center">
+                            <input type="number" id="ai-filter-year" min="2000" max="2100" onchange="runShiftAudit()" class="w-20 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs text-center">
                         </div>
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Cidade / Local de Emissão</label>
-                        <input type="text" id="ai-report-city" value="Ibirubá - RS" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs">
+                        <input type="text" id="ai-report-city" value="Ibirubá - RS" maxlength="80" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs">
                     </div>
                 </div>
 
@@ -280,7 +282,7 @@
                     <div class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                         <span class="text-xs uppercase font-bold text-blue-700 dark:text-blue-300 block">Plantões Identificados</span>
                         <span id="ai-total-shifts" class="text-3xl font-extrabold text-blue-900 dark:text-blue-100">0</span>
-                        <span class="text-[11px] text-blue-600 dark:text-blue-400 block mt-1">Escalas mapeadas</span>
+                        <span class="text-[11px] text-blue-600 dark:text-blue-400 block mt-1">Plantões que viram a meia-noite contam como 1</span>
                     </div>
                     <div class="bg-amber-50 dark:bg-amber-900/30 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
                         <span class="text-xs uppercase font-bold text-amber-700 dark:text-amber-300 block">Hospitais / Unidades</span>
@@ -288,6 +290,8 @@
                         <span class="text-[11px] text-amber-600 dark:text-amber-400 block mt-1">Instituições distintas</span>
                     </div>
                 </div>
+
+                <div id="ai-audit-warnings" class="hidden p-3 rounded border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-300"></div>
 
                 <!-- Detalhamento por Hospital/Empresa -->
                 <div>
@@ -298,7 +302,7 @@
                 <!-- Aviso de Auditoria -->
                 <div class="p-3 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-400 flex items-start space-x-2">
                     <i class="fas fa-info-circle text-pokulai-accent mt-0.5"></i>
-                    <span>O algoritmo de rastreamento isola apenas eventos com tipo <strong>Plantão</strong>. Compromissos como exames, consultas ou reuniões são automaticamente descartados do cômputo de horas e da certidão.</span>
+                    <span>A apuração considera apenas lançamentos com tipo <strong>Plantão</strong>. Exames, consultas ou reuniões são descartados do cômputo de horas e do relatório. O PDF é uma <strong>autodeclaração</strong> baseada nos seus lançamentos e só tem validade com a assinatura da contratante.</span>
                 </div>
             </div>
 
@@ -307,7 +311,7 @@
                 <button onclick="closeShiftTrackerModal()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">Fechar</button>
                 <div class="flex space-x-2">
                     <button onclick="generateStructuredShiftReportPDF()" class="bg-pokulai-brand text-white px-4 py-2 rounded text-xs font-bold hover:bg-teal-600 transition-colors shadow-md flex items-center">
-                        <i class="fas fa-file-signature mr-2"></i> Exportar Relatório Certificado (PDF)
+                        <i class="fas fa-file-signature mr-2"></i> Exportar Relatório de Apuração (PDF)
                     </button>
                 </div>
             </div>
@@ -330,9 +334,11 @@
                     <label class="block font-bold text-gray-600 dark:text-gray-300 mb-1">SUPABASE ANON KEY (Pública / Segura com RLS)</label>
                     <input type="password" id="cfg-supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white">
                 </div>
-                <div class="bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-800 dark:text-emerald-300">
-                    <p class="font-bold mb-1"><i class="fas fa-shield-alt mr-1"></i> Segurança Ativa:</p>
-                    <p>O Supabase opera sob <strong>Row Level Security (RLS)</strong>: a chave anônima apenas executa operações permitidas pelas regras SQL. Enquanto não preenchido, a aplicação utiliza persistência segura em <code>localStorage</code>.</p>
+                <div class="bg-amber-50 dark:bg-amber-950/30 p-3 rounded border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+                    <p class="font-bold"><i class="fas fa-shield-alt mr-1"></i> Importante sobre segurança:</p>
+                    <p>O Supabase é usado <strong>apenas para login</strong>. A agenda (plantões, locais, profissionais) continua salva somente <strong>neste navegador</strong> (<code>localStorage</code>), sem criptografia e sem sincronização entre aparelhos.</p>
+                    <p>Nunca cole aqui a chave <code>service_role</code>. Use somente a chave <code>anon</code> e mantenha RLS ativo na tabela <code>profiles</code> (o usuário não pode alterar o próprio campo <code>role</code>).</p>
+                    <p>Deixe os dois campos em branco para voltar ao modo local.</p>
                 </div>
             </div>
             <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-end space-x-2">
@@ -353,113 +359,135 @@
                 <p>O Supabase suporta verificação em duas etapas via aplicativo autenticador (Google Authenticator, Authy, etc.).</p>
                 <div class="p-3 bg-gray-100 dark:bg-gray-700 rounded text-center">
                     <p class="font-semibold text-gray-700 dark:text-gray-200 mb-1">Status MFA Atual:</p>
-                    <span id="mfa-status-text" class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">Nível 1 (Senha Padrão)</span>
+                    <span id="mfa-status-text" class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">Verificando...</span>
                 </div>
-                <button onclick="enrollMfaTotp()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded text-xs shadow-sm transition-colors">
+                <button id="mfa-enroll-btn" onclick="enrollMfaTotp()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded text-xs shadow-sm transition-colors">
                     Ativar Segundo Fator de Autenticação (TOTP)
                 </button>
+                <div id="mfa-enroll-box" class="hidden space-y-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+                    <p>1. Escaneie o QR Code no aplicativo autenticador:</p>
+                    <img id="mfa-qr" alt="QR Code TOTP" class="mx-auto w-40 h-40 bg-white p-1 rounded">
+                    <p>Ou digite a chave manualmente: <code id="mfa-secret" class="break-all font-bold"></code></p>
+                    <p>2. Digite o código de 6 dígitos gerado para confirmar:</p>
+                    <div class="flex space-x-2">
+                        <input id="mfa-code" inputmode="numeric" maxlength="6" placeholder="000000" class="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-center tracking-widest">
+                        <button onclick="verifyMfaEnrollment()" class="bg-pokulai-brand text-white px-4 rounded font-bold">Confirmar</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
         // =========================================================================
+        // UTILITÁRIOS (escape de HTML, armazenamento seguro, IDs, formatação)
+        // =========================================================================
+        const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' };
+        function esc(value) { return String(value ?? '').replace(/[&<>"'`]/g, c => HTML_ESCAPES[c]); }
+        // Remove acentos mantendo o comprimento do texto (cada letra acentuada vira uma letra base)
+        function stripAccents(s) { return String(s || '').normalize('NFC').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+        function norm(s) { return stripAccents(String(s || '').normalize('NFC').toLowerCase()); }
+        function tokens(s) { return norm(s).split(/[^a-z0-9]+/).filter(Boolean); }
+        function pad2(n) { return String(n).padStart(2, '0'); }
+        function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
+        function fmtHours(h) { return (Math.round((parseFloat(h) || 0) * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); }
+        function fmtMin(min) { if (min >= 1440) return '24h'; const h = Math.floor(min / 60), m = min % 60; return m ? `${pad2(h)}h${pad2(m)}` : `${pad2(h)}h`; }
+        function fmtDate(e) { return `${pad2(e.date)}/${pad2(e.month)}/${e.year}`; }
+        function safeFileName(s) { return stripAccents(String(s || '')).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'Relatorio'; }
+        function shortName(name) { const parts = String(name || '').split(/\s+/).filter(Boolean); return parts.slice(0, 2).join(' '); }
+
+        function loadJSON(key, fallback) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (raw === null) return fallback;
+                const parsed = JSON.parse(raw);
+                return parsed ?? fallback;
+            } catch (e) {
+                console.warn(`Dados ilegíveis em "${key}". Usando valores padrão.`, e);
+                return fallback;
+            }
+        }
+        let storageWarningShown = false;
+        function storeJSON(key, value) {
+            try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+            catch (e) {
+                console.error('Falha ao salvar', key, e);
+                if (!storageWarningShown) { storageWarningShown = true; alert('Atenção: não foi possível salvar os dados neste navegador (armazenamento cheio ou bloqueado). As alterações podem ser perdidas ao recarregar.'); }
+                return false;
+            }
+        }
+        function storeRemove(key) { try { localStorage.removeItem(key); } catch (e) { /* ignora */ } }
+
+        // IDs numéricos únicos e crescentes (Date.now() puro colide em operações no mesmo milissegundo)
+        let lastId = 0;
+        function newId() { lastId = Math.max(Date.now(), lastId + 1); return lastId; }
+
+        const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+        // =========================================================================
         // GERENCIAMENTO DE TEMA E INTERFACE
         // =========================================================================
         function toggleSidebar() { document.getElementById('main-sidebar').classList.toggle('collapsed'); }
+        function syncThemeIcon() {
+            const icon = document.getElementById('theme-icon');
+            icon.className = document.documentElement.classList.contains('dark') ? 'fas fa-sun text-yellow-400 text-xl' : 'fas fa-moon text-gray-500 text-xl';
+        }
         function toggleTheme() {
-            const html = document.documentElement; const icon = document.getElementById('theme-icon');
-            if (html.classList.contains('dark')) { html.classList.remove('dark'); localStorage.setItem('pokulai_theme', 'light'); icon.className = 'fas fa-moon text-gray-500 text-xl'; }
-            else { html.classList.add('dark'); localStorage.setItem('pokulai_theme', 'dark'); icon.className = 'fas fa-sun text-yellow-400 text-xl'; }
+            const isDark = document.documentElement.classList.toggle('dark');
+            try { localStorage.setItem('pokulai_theme', isDark ? 'dark' : 'light'); } catch (e) { /* ignora */ }
+            syncThemeIcon();
+        }
+        function isFullScreen() { return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement); }
+        function syncFullScreenIcon() {
+            const icon = document.getElementById('fullscreen-icon');
+            icon.classList.toggle('fa-expand', !isFullScreen());
+            icon.classList.toggle('fa-compress', isFullScreen());
         }
         function toggleFullScreen() {
-            const doc = window.document; const docEl = doc.documentElement; const icon = document.getElementById('fullscreen-icon');
-            const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
-            const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
-            if(!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) { requestFullScreen.call(docEl); icon.classList.remove('fa-expand'); icon.classList.add('fa-compress'); }
-            else { cancelFullScreen.call(doc); icon.classList.remove('fa-compress'); icon.classList.add('fa-expand'); }
+            const docEl = document.documentElement;
+            const request = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+            const cancel = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+            try {
+                if (!isFullScreen()) { if (!request) return alert('Tela cheia não suportada neste navegador.'); const r = request.call(docEl); if (r && r.catch) r.catch(() => {}); }
+                else if (cancel) { const r = cancel.call(document); if (r && r.catch) r.catch(() => {}); }
+            } catch (e) { console.warn(e); }
         }
+        document.addEventListener('fullscreenchange', syncFullScreenIcon);
+        document.addEventListener('webkitfullscreenchange', syncFullScreenIcon);
+
         function changeMonth(delta) {
             viewingMonth += delta;
-            if(viewingMonth > 12) { viewingMonth = 1; viewingYear++; }
-            if(viewingMonth < 1) { viewingMonth = 12; viewingYear--; }
+            if (viewingMonth > 12) { viewingMonth = 1; viewingYear++; }
+            if (viewingMonth < 1) { viewingMonth = 12; viewingYear--; }
             renderApp();
         }
+        function goToToday() { const t = new Date(); viewingMonth = t.getMonth() + 1; viewingYear = t.getFullYear(); renderApp(); }
+
+        function toggleExportMenu(e) { e.stopPropagation(); document.getElementById('export-group').classList.toggle('open'); }
+        document.addEventListener('click', (e) => { const g = document.getElementById('export-group'); if (g && !g.contains(e.target)) g.classList.remove('open'); });
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            ['ai-shifts-modal', 'supabase-config-modal', 'mfa-modal'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            document.getElementById('export-group').classList.remove('open');
+        });
 
         // =========================================================================
-        // CLIENTE SUPABASE & FALLBACK
+        // DADOS GLOBAIS (com validação do que vem do localStorage)
         // =========================================================================
-        let supabaseClient = null;
-        let supabaseConfig = JSON.parse(localStorage.getItem('pokulai_supabase_cfg')) || { url: '', key: '' };
-
-        function initSupabase() {
-            if (supabaseConfig.url && supabaseConfig.key && window.supabase) {
-                try {
-                    supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.key, {
-                        auth: { persistSession: true, autoRefreshToken: true }
-                    });
-                    document.getElementById('supabase-status-badge').innerText = 'Conectado ao Supabase';
-                    document.getElementById('supabase-status-badge').className = 'text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300';
-                    checkSupabaseSession();
-                } catch(e) {
-                    console.error("Erro ao inicializar Supabase:", e);
-                }
-            } else {
-                document.getElementById('supabase-status-badge').innerText = 'Modo Local (Teste)';
-                document.getElementById('supabase-status-badge').className = 'text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
-            }
-        }
-
-        function openConfigModal() {
-            document.getElementById('cfg-supabase-url').value = supabaseConfig.url || '';
-            document.getElementById('cfg-supabase-key').value = supabaseConfig.key || '';
-            document.getElementById('supabase-config-modal').classList.remove('hidden');
-        }
-        function closeConfigModal() { document.getElementById('supabase-config-modal').classList.add('hidden'); }
-        function saveSupabaseConfig() {
-            supabaseConfig.url = document.getElementById('cfg-supabase-url').value.trim();
-            supabaseConfig.key = document.getElementById('cfg-supabase-key').value.trim();
-            localStorage.setItem('pokulai_supabase_cfg', JSON.stringify(supabaseConfig));
-            closeConfigModal();
-            initSupabase();
-            alert("Configurações do Supabase atualizadas.");
-        }
-
-        async function checkSupabaseSession() {
-            if(!supabaseClient) return;
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                const user = session.user;
-                const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', user.id).single();
-                authUser = {
-                    id: user.id,
-                    name: profile ? profile.name : user.email.split('@')[0],
-                    role: profile ? profile.role : 'doctor',
-                    roleLabel: (profile && profile.role === 'admin') ? 'Administrador Geral' : 'Médico Titular',
-                    crm: profile ? profile.crm : '12345/RS',
-                    profId: 1
-                };
-                currentViewProfId = authUser.role === 'admin' ? 0 : 1;
-                applyAuthState();
-            }
-        }
-
-        // =========================================================================
-        // DADOS GLOBAIS
-        // =========================================================================
-        let professionals = JSON.parse(localStorage.getItem('pokulai_profs_v14')) || [
-            { id: 1, name: 'Dr. Enrique Pokulat', spec: 'Médico Titular', crm: '43.210/RS' },
-            { id: 2, name: 'Dra. Maria Souza', spec: 'Plantão Secundário', crm: '38.990/RS' }
-        ];
-
         const colorPalette = [
             { bg: 'bg-blue-600', dot: 'blue' }, { bg: 'bg-teal-600', dot: 'teal' },
             { bg: 'bg-purple-600', dot: 'purple' }, { bg: 'bg-orange-600', dot: 'orange' },
             { bg: 'bg-pink-600', dot: 'pink' }, { bg: 'bg-indigo-600', dot: 'indigo' },
             { bg: 'bg-red-600', dot: 'red' }, { bg: 'bg-green-600', dot: 'green' }
         ];
+        // Classes permitidas: impede injeção de classes/atributos via dados adulterados
+        const allowedColors = [...colorPalette, { bg: 'bg-yellow-500 text-dark-override', dot: 'yellow' }];
 
-        let locations = JSON.parse(localStorage.getItem('pokulai_locations_v14')) || [
+        const DEFAULT_PROFESSIONALS = [
+            { id: 1, name: 'Dr. Enrique Pokulat', spec: 'Médico Titular', crm: '43.210/RS' },
+            { id: 2, name: 'Dra. Maria Souza', spec: 'Plantão Secundário', crm: '38.990/RS' }
+        ];
+        const DEFAULT_LOCATIONS = [
             { id: 1, name: 'Hospital Comunitário Jaboticaba', locType: 'plantao', colorClass: 'bg-blue-600', dotColor: 'blue', expanded: true },
             { id: 2, name: 'Hospital São Lucas - Chapada', locType: 'plantao', colorClass: 'bg-teal-600', dotColor: 'teal', expanded: true },
             { id: 3, name: 'Hospital de Caridade Santa Maria', locType: 'exame', colorClass: 'bg-purple-600', dotColor: 'purple', expanded: true },
@@ -468,14 +496,13 @@
             { id: 6, name: 'Clínica Radiplan (Passo Fundo)', locType: 'exame', colorClass: 'bg-pink-600', dotColor: 'pink', expanded: true },
             { id: 7, name: 'Hospital de Caridade Carazinho', locType: 'exame', colorClass: 'bg-indigo-600', dotColor: 'indigo', expanded: true }
         ];
-
-        let events = JSON.parse(localStorage.getItem('pokulai_events_v14')) || [
+        const DEFAULT_EVENTS = [
             { id: 101, profId: 1, locId: 1, date: 2, month: 10, year: 2026, text: '07:00 às 07:00 (24h)', type: 'plantao', hours: 24, examsCount: 0 },
             { id: 102, profId: 1, locId: 1, date: 3, month: 10, year: 2026, text: '07:00 às 07:00 (24h)', type: 'plantao', hours: 24, examsCount: 0 },
             { id: 103, profId: 1, locId: 1, date: 9, month: 10, year: 2026, text: '07:00 às 07:00 (24h)', type: 'plantao', hours: 24, examsCount: 0 },
             { id: 104, profId: 1, locId: 1, date: 10, month: 10, year: 2026, text: '07:00 às 07:00 (24h)', type: 'plantao', hours: 24, examsCount: 0 },
-            { id: 201, profId: 1, locId: 2, date: 7, month: 10, year: 2026, text: 'das 17h às 24h', type: 'plantao', hours: 7, examsCount: 0 },
-            { id: 2011, profId: 1, locId: 2, date: 8, month: 10, year: 2026, text: 'das 00h às 07h', type: 'plantao', hours: 7, examsCount: 0 },
+            { id: 201, profId: 1, locId: 2, date: 7, month: 10, year: 2026, text: 'das 17h às 24h', type: 'plantao', hours: 7, examsCount: 0, groupId: 201 },
+            { id: 2011, profId: 1, locId: 2, date: 8, month: 10, year: 2026, text: 'das 00h às 07h', type: 'plantao', hours: 7, examsCount: 0, groupId: 201 },
             { id: 202, profId: 1, locId: 2, date: 14, month: 10, year: 2026, text: '17:30 às 07:00', type: 'plantao', hours: 13.5, examsCount: 0 },
             { id: 203, profId: 1, locId: 2, date: 21, month: 10, year: 2026, text: '17:30 às 07:00', type: 'plantao', hours: 13.5, examsCount: 0 },
             { id: 401, profId: 1, locId: 4, date: 5, month: 10, year: 2026, text: '08:00 às 20:00 (12h)', type: 'plantao', hours: 12, examsCount: 0 },
@@ -485,99 +512,262 @@
             { id: 601, profId: 1, locId: 6, date: 6, month: 10, year: 2026, text: '08:00 às 17:00', type: 'exame', hours: 9, examsCount: 20 }
         ];
 
-        let voiceLogs = JSON.parse(localStorage.getItem('pokulai_voice_logs_v14')) || [];
+        function sanitizeProfessionals(list) {
+            if (!Array.isArray(list)) return DEFAULT_PROFESSIONALS.map(p => ({ ...p }));
+            return list.filter(p => p && Number.isFinite(Number(p.id)) && String(p.name || '').trim())
+                .map(p => ({ id: Number(p.id), name: String(p.name).trim(), spec: String(p.spec || ''), crm: String(p.crm || ''), email: String(p.email || '') }));
+        }
+        function sanitizeLocations(list) {
+            if (!Array.isArray(list)) return DEFAULT_LOCATIONS.map(l => ({ ...l }));
+            return list.filter(l => l && Number.isFinite(Number(l.id)) && String(l.name || '').trim()).map(l => {
+                const color = allowedColors.find(c => c.bg === l.colorClass && c.dot === l.dotColor) || colorPalette[Math.abs(Number(l.id)) % colorPalette.length];
+                return { id: Number(l.id), name: String(l.name).trim(), locType: l.locType === 'exame' ? 'exame' : 'plantao', colorClass: color.bg, dotColor: color.dot, expanded: l.expanded !== false };
+            });
+        }
+        function sanitizeEvents(list) {
+            if (!Array.isArray(list)) return DEFAULT_EVENTS.map(e => ({ ...e }));
+            return list.filter(e => e && Number.isFinite(Number(e.id))).map(e => {
+                const ev = {
+                    id: Number(e.id), profId: Number(e.profId), locId: Number(e.locId),
+                    date: parseInt(e.date, 10), month: parseInt(e.month, 10), year: parseInt(e.year, 10),
+                    text: String(e.text ?? ''), type: e.type === 'exame' ? 'exame' : 'plantao',
+                    hours: Math.max(0, parseFloat(e.hours) || 0), examsCount: Math.max(0, parseInt(e.examsCount, 10) || 0)
+                };
+                if (Number.isFinite(Number(e.groupId))) ev.groupId = Number(e.groupId);
+                if (Number.isFinite(e.startMin) && Number.isFinite(e.endMin)) { ev.startMin = e.startMin; ev.endMin = e.endMin; }
+                return ev;
+            }).filter(e => e.month >= 1 && e.month <= 12 && e.year >= 1900 && e.year <= 2200 && e.date >= 1 && e.date <= daysInMonth(e.year, e.month));
+        }
+        function sanitizeLogs(list) {
+            if (!Array.isArray(list)) return [];
+            return list.filter(l => l && typeof l === 'object').slice(0, 20).map(l => ({ time: String(l.time || ''), transcript: String(l.transcript || ''), resultStr: String(l.resultStr || ''), status: ['ok', 'warn', 'error'].includes(l.status) ? l.status : 'ok' }));
+        }
+
+        let professionals, locations, events, voiceLogs;
+        function loadAllData() {
+            professionals = sanitizeProfessionals(loadJSON('pokulai_profs_v14', null));
+            locations = sanitizeLocations(loadJSON('pokulai_locations_v14', null));
+            events = sanitizeEvents(loadJSON('pokulai_events_v14', null));
+            voiceLogs = sanitizeLogs(loadJSON('pokulai_voice_logs_v14', []));
+            lastId = Math.max(lastId, ...professionals.map(p => p.id), ...locations.map(l => l.id), ...events.map(e => e.id), 0);
+        }
+        loadAllData();
+
+        const today0 = new Date();
         let currentViewProfId = 0;
-        let viewingMonth = 10;
-        let viewingYear = 2026;
+        let viewingMonth = today0.getMonth() + 1;
+        let viewingYear = today0.getFullYear();
 
         function saveData() {
-            localStorage.setItem('pokulai_profs_v14', JSON.stringify(professionals));
-            localStorage.setItem('pokulai_locations_v14', JSON.stringify(locations));
-            localStorage.setItem('pokulai_events_v14', JSON.stringify(events));
-            localStorage.setItem('pokulai_voice_logs_v14', JSON.stringify(voiceLogs));
+            storeJSON('pokulai_profs_v14', professionals);
+            storeJSON('pokulai_locations_v14', locations);
+            storeJSON('pokulai_events_v14', events);
+            storeJSON('pokulai_voice_logs_v14', voiceLogs);
+        }
+
+        // Sincroniza alterações feitas em outra aba (evita uma aba sobrescrever a outra)
+        window.addEventListener('storage', (e) => {
+            if (e.key && /^pokulai_.*_v14$/.test(e.key)) { loadAllData(); renderApp(); }
+        });
+
+        // =========================================================================
+        // CLIENTE SUPABASE & FALLBACK
+        // =========================================================================
+        let supabaseClient = null;
+        let supabaseConfig = Object.assign({ url: '', key: '' }, loadJSON('pokulai_supabase_cfg', {}));
+        let authUser = null;
+        let pendingFactorId = null;
+
+        function setBadge(text, tone) {
+            const badge = document.getElementById('supabase-status-badge');
+            const tones = {
+                ok: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
+                local: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+                error: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+            };
+            badge.innerText = text;
+            badge.className = 'text-[9px] px-1.5 py-0.5 rounded ' + tones[tone];
+        }
+
+        function initSupabase() {
+            supabaseClient = null;
+            const hint = document.getElementById('login-hint');
+            if (!supabaseConfig.url || !supabaseConfig.key) {
+                setBadge('Modo Local (Teste)', 'local');
+                hint.innerText = "Modo local (sem segurança real): digite 'admin' ou o nome do profissional e clique em Entrar.";
+                return;
+            }
+            if (!window.supabase || !window.supabase.createClient) {
+                setBadge('Supabase indisponível', 'error');
+                hint.innerText = 'Não foi possível carregar a biblioteca do Supabase (sem internet?). Login desativado.';
+                return;
+            }
+            try {
+                supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.key, {
+                    auth: { persistSession: true, autoRefreshToken: true, storageKey: 'pokulai_sb_auth' }
+                });
+                setBadge('Supabase configurado', 'ok');
+                hint.innerText = 'Entre com seu e-mail e senha cadastrados.';
+                checkSupabaseSession();
+            } catch (e) {
+                console.error('Erro ao inicializar Supabase:', e);
+                supabaseClient = null;
+                setBadge('Erro na configuração', 'error');
+                hint.innerText = 'Configuração do Supabase inválida: ' + e.message;
+            }
+        }
+
+        function openConfigModal() {
+            document.getElementById('cfg-supabase-url').value = supabaseConfig.url || '';
+            document.getElementById('cfg-supabase-key').value = supabaseConfig.key || '';
+            document.getElementById('supabase-config-modal').classList.remove('hidden');
+        }
+        function closeConfigModal() { document.getElementById('supabase-config-modal').classList.add('hidden'); }
+        async function saveSupabaseConfig() {
+            const url = document.getElementById('cfg-supabase-url').value.trim().replace(/\/+$/, '');
+            const key = document.getElementById('cfg-supabase-key').value.trim();
+            if ((url && !key) || (!url && key)) return alert('Preencha a URL e a chave, ou deixe ambos em branco para o modo local.');
+            if (url && !/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(url)) return alert('URL inválida. Exemplo: https://xyzcompany.supabase.co');
+            if (key && /service_role/.test(atobSafe(key.split('.')[1] || ''))) return alert('Esta é uma chave service_role (secreta). Nunca a use no navegador. Cole a chave "anon".');
+            // Encerra a sessão atual antes de trocar de projeto/modo
+            if (supabaseClient) { try { await supabaseClient.auth.signOut(); } catch (e) { /* ignora */ } }
+            authUser = null; storeRemove('pokulai_auth_user_visual');
+            supabaseConfig = { url, key };
+            storeJSON('pokulai_supabase_cfg', supabaseConfig);
+            closeConfigModal();
+            initSupabase();
+            applyAuthState();
+            alert(url ? 'Configurações do Supabase atualizadas. Faça login com e-mail e senha.' : 'Supabase desativado. Aplicação em modo local.');
+        }
+        function atobSafe(s) { try { return atob(s.replace(/-/g, '+').replace(/_/g, '/')); } catch (e) { return ''; } }
+
+        // Exige o código TOTP quando o usuário tem MFA ativo (nível AAL2)
+        async function ensureMfaLevel() {
+            const { data, error } = await supabaseClient.auth.mfa.getAuthenticatorAssuranceLevel();
+            if (error) throw error;
+            if (data.nextLevel !== 'aal2' || data.currentLevel === 'aal2') return true;
+            const { data: factors, error: fErr } = await supabaseClient.auth.mfa.listFactors();
+            if (fErr) throw fErr;
+            const totp = (factors.totp || []).find(f => f.status === 'verified');
+            if (!totp) return true;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const code = prompt('Verificação em duas etapas: digite o código de 6 dígitos do aplicativo autenticador.');
+                if (code === null) return false;
+                const { error: vErr } = await supabaseClient.auth.mfa.challengeAndVerify({ factorId: totp.id, code: code.trim() });
+                if (!vErr) return true;
+                alert('Código inválido: ' + vErr.message);
+            }
+            return false;
+        }
+
+        // Vincula o usuário autenticado a um profissional da agenda (por e-mail, depois por nome; senão cria)
+        function linkProfessional({ name, email, crm }) {
+            let p = email ? professionals.find(x => x.email && norm(x.email) === norm(email)) : null;
+            if (!p) p = professionals.find(x => norm(x.name) === norm(name));
+            if (!p) { p = { id: newId(), name, spec: 'Médico', crm: crm || '', email: email || '' }; professionals.push(p); saveData(); }
+            else if (email && !p.email) { p.email = email; saveData(); }
+            return p;
+        }
+
+        async function checkSupabaseSession() {
+            if (!supabaseClient) return;
+            try {
+                const { data: { session }, error } = await supabaseClient.auth.getSession();
+                if (error) throw error;
+                if (!session) { if (authUser && authUser.source === 'supabase') { authUser = null; applyAuthState(); } return; }
+                if (!(await ensureMfaLevel())) { await supabaseClient.auth.signOut(); alert('Login cancelado: verificação em duas etapas não concluída.'); return; }
+                const user = session.user;
+                const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', user.id).maybeSingle();
+                const email = user.email || '';
+                const name = (profile && profile.name) || (email ? email.split('@')[0] : 'Usuário');
+                const role = profile && profile.role === 'admin' ? 'admin' : 'doctor';
+                const prof = role === 'admin' ? null : linkProfessional({ name, email, crm: profile && profile.crm });
+                authUser = { id: user.id, name, email, role, roleLabel: role === 'admin' ? 'Administrador Geral' : 'Médico Titular', profId: prof ? prof.id : null, source: 'supabase' };
+                currentViewProfId = role === 'admin' ? 0 : prof.id;
+                applyAuthState();
+            } catch (e) {
+                console.error(e);
+                alert('Falha ao validar a sessão no Supabase: ' + e.message);
+            }
         }
 
         // =========================================================================
-        // MÓDULO INTELIGENTE DE RASTREAMENTO E APURAÇÃO DE PLANTÕES
+        // MÓDULO DE RASTREAMENTO E APURAÇÃO DE PLANTÕES
         // =========================================================================
         let currentAuditData = null;
 
+        function auditableProfessionals() {
+            if (authUser && authUser.role !== 'admin') return professionals.filter(p => p.id === authUser.profId);
+            return professionals;
+        }
+
         function openShiftTrackerModal() {
-            const profSelect = document.getElementById('ai-filter-prof');
-            profSelect.innerHTML = professionals.map(p => `<option value="${p.id}" ${p.id === (currentViewProfId || 1) ? 'selected' : ''}>${p.name}</option>`).join('');
-
-            const monthSelect = document.getElementById('ai-filter-month');
-            monthSelect.innerHTML = monthNames.map((m, idx) => `<option value="${idx + 1}" ${idx + 1 === viewingMonth ? 'selected' : ''}>${m}</option>`).join('');
-
+            const list = auditableProfessionals();
+            if (list.length === 0) return alert('Cadastre ao menos um profissional antes de apurar plantões.');
+            const preferred = list.some(p => p.id === currentViewProfId) ? currentViewProfId : list[0].id;
+            document.getElementById('ai-filter-prof').innerHTML = list.map(p => `<option value="${p.id}" ${p.id === preferred ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+            document.getElementById('ai-filter-month').innerHTML = monthNames.map((m, idx) => `<option value="${idx + 1}" ${idx + 1 === viewingMonth ? 'selected' : ''}>${m}</option>`).join('');
             document.getElementById('ai-filter-year').value = viewingYear;
             document.getElementById('ai-shifts-modal').classList.remove('hidden');
             runShiftAudit();
         }
 
-        function closeShiftTrackerModal() {
-            document.getElementById('ai-shifts-modal').classList.add('hidden');
-        }
+        function closeShiftTrackerModal() { document.getElementById('ai-shifts-modal').classList.add('hidden'); }
 
         function runShiftAudit() {
-            const profId = parseInt(document.getElementById('ai-filter-prof').value);
-            const month = parseInt(document.getElementById('ai-filter-month').value);
-            const year = parseInt(document.getElementById('ai-filter-year').value);
-            const prof = professionals.find(p => p.id === profId) || professionals[0];
+            const profId = parseInt(document.getElementById('ai-filter-prof').value, 10);
+            const month = parseInt(document.getElementById('ai-filter-month').value, 10);
+            const year = parseInt(document.getElementById('ai-filter-year').value, 10);
+            const prof = professionals.find(p => p.id === profId);
+            const breakdownTable = document.getElementById('ai-breakdown-table');
+            const warningsEl = document.getElementById('ai-audit-warnings');
 
-            // RASTREAMENTO INTELIGENTE: APENAS TIPO 'plantao'
-            const shiftEvents = events.filter(e => {
-                return e.profId === profId &&
-                       e.month === month &&
-                       e.year === year &&
-                       e.type === 'plantao'; // REGRA DE OURO: Desconsidera exames e outros compromissos
-            });
+            if (!prof || !(year >= 2000 && year <= 2100)) {
+                currentAuditData = null;
+                ['ai-total-hours', 'ai-total-shifts', 'ai-total-locations'].forEach(id => document.getElementById(id).innerText = '—');
+                breakdownTable.innerHTML = `<div class="p-6 text-center text-gray-400 italic">Selecione um profissional e um ano válido.</div>`;
+                warningsEl.classList.add('hidden');
+                return;
+            }
 
-            shiftEvents.sort((a,b) => a.date - b.date);
+            // Apenas lançamentos do tipo 'plantao' (exames e outros compromissos são descartados)
+            const shiftEvents = events
+                .filter(e => e.profId === profId && e.month === month && e.year === year && e.type === 'plantao')
+                .sort((a, b) => a.date - b.date || (eventInterval(a)?.[0] ?? 0) - (eventInterval(b)?.[0] ?? 0));
 
-            // Agregação por Local/Hospital
-            const breakdown = {};
+            // Agregação por local (chave = id, para não fundir locais homônimos)
+            const breakdown = new Map();
             let grandTotalHours = 0;
+            const shiftKeys = new Set();
+            const zeroHour = [];
 
             shiftEvents.forEach(ev => {
-                const loc = locations.find(l => l.id === ev.locId) || { name: 'Hospital Geral' };
-                if (!breakdown[loc.name]) {
-                    breakdown[loc.name] = {
-                        locationName: loc.name,
-                        locType: loc.locType,
-                        totalHours: 0,
-                        shiftsCount: 0,
-                        entries: []
-                    };
-                }
+                const loc = locations.find(l => l.id === ev.locId) || { id: -1, name: 'Local removido' };
+                if (!breakdown.has(loc.id)) breakdown.set(loc.id, { locationName: loc.name, totalHours: 0, shiftKeys: new Set(), entries: [] });
+                const item = breakdown.get(loc.id);
                 const h = parseFloat(ev.hours) || 0;
-                breakdown[loc.name].totalHours += h;
-                breakdown[loc.name].shiftsCount += 1;
-                breakdown[loc.name].entries.push({
-                    date: `${String(ev.date).padStart(2,'0')}/${String(ev.month).padStart(2,'0')}/${ev.year}`,
-                    hours: h,
-                    text: ev.text
-                });
+                const key = ev.groupId || ev.id;
+                item.totalHours += h;
+                item.shiftKeys.add(key);
+                item.entries.push({ day: pad2(ev.date), hours: h });
+                shiftKeys.add(key);
                 grandTotalHours += h;
+                if (h === 0) zeroHour.push(`${fmtDate(ev)} (${loc.name})`);
             });
+            grandTotalHours = Math.round(grandTotalHours * 100) / 100;
 
-            currentAuditData = {
-                prof,
-                month,
-                year,
-                grandTotalHours,
-                totalShifts: shiftEvents.length,
-                totalLocations: Object.keys(breakdown).length,
-                breakdown,
-                shiftEvents
-            };
+            currentAuditData = { prof, month, year, grandTotalHours, totalShifts: shiftKeys.size, totalLocations: breakdown.size, shiftEvents };
 
-            // Atualização de UI
-            document.getElementById('ai-total-hours').innerText = `${grandTotalHours}h`;
-            document.getElementById('ai-total-shifts').innerText = shiftEvents.length;
-            document.getElementById('ai-total-locations').innerText = Object.keys(breakdown).length;
+            document.getElementById('ai-total-hours').innerText = `${fmtHours(grandTotalHours)}h`;
+            document.getElementById('ai-total-shifts').innerText = shiftKeys.size;
+            document.getElementById('ai-total-locations').innerText = breakdown.size;
 
-            const breakdownTable = document.getElementById('ai-breakdown-table');
-            if (Object.keys(breakdown).length === 0) {
+            if (zeroHour.length) {
+                warningsEl.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${zeroHour.length} plantão(ões) sem horas lançadas — o total pode estar subestimado: ${esc(zeroHour.join('; '))}`;
+                warningsEl.classList.remove('hidden');
+            } else warningsEl.classList.add('hidden');
+
+            if (breakdown.size === 0) {
                 breakdownTable.innerHTML = `<div class="p-6 text-center text-gray-400 italic">Nenhum plantão localizado para este profissional no período selecionado.</div>`;
                 return;
             }
@@ -592,38 +782,39 @@
                             <th class="p-3 text-center">Datas / Escalas</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            `;
-
-            for (const locName in breakdown) {
-                const item = breakdown[locName];
-                const datesSummary = item.entries.map(e => `${e.date.split('/')[0]} (${e.hours}h)`).join(', ');
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">`;
+            breakdown.forEach(item => {
+                const datesSummary = item.entries.map(e => `${e.day} (${fmtHours(e.hours)}h)`).join(', ');
                 tableHtml += `
                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                        <td class="p-3 font-semibold text-gray-800 dark:text-gray-200"><i class="far fa-hospital mr-2 text-teal-600"></i>${item.locationName}</td>
-                        <td class="p-3 text-center">${item.shiftsCount}</td>
-                        <td class="p-3 text-right font-bold text-teal-700 dark:text-teal-400">${item.totalHours}h</td>
-                        <td class="p-3 text-center text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-xs" title="${datesSummary}">Dias: ${datesSummary}</td>
-                    </tr>
-                `;
-            }
-
+                        <td class="p-3 font-semibold text-gray-800 dark:text-gray-200"><i class="far fa-hospital mr-2 text-teal-600"></i>${esc(item.locationName)}</td>
+                        <td class="p-3 text-center">${item.shiftKeys.size}</td>
+                        <td class="p-3 text-right font-bold text-teal-700 dark:text-teal-400">${fmtHours(item.totalHours)}h</td>
+                        <td class="p-3 text-center text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-xs" title="${esc(datesSummary)}">Dias: ${esc(datesSummary)}</td>
+                    </tr>`;
+            });
             tableHtml += `</tbody></table>`;
             breakdownTable.innerHTML = tableHtml;
         }
 
+        function getJsPDF() {
+            if (!window.jspdf || !window.jspdf.jsPDF) { alert('Biblioteca de PDF não carregada (verifique a conexão com a internet).'); return null; }
+            const doc = new window.jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            if (typeof doc.autoTable !== 'function') { alert('Plugin de tabelas do PDF não carregado (verifique a conexão).'); return null; }
+            return doc;
+        }
+
         // =========================================================================
-        // GERAÇÃO DE RELATÓRIO ESTRUTURADO CERTIFICADO EM PDF
+        // RELATÓRIO DE APURAÇÃO EM PDF (autodeclaração para conferência da contratante)
         // =========================================================================
         function generateStructuredShiftReportPDF() {
             if (!currentAuditData || currentAuditData.totalShifts === 0) {
                 alert("Nenhum plantão localizado para emissão do relatório.");
                 return;
             }
-
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-            const city = document.getElementById('ai-report-city').value || 'Ibirubá - RS';
+            const doc = getJsPDF(); if (!doc) return;
+            const { prof, month, year, grandTotalHours, shiftEvents } = currentAuditData;
+            const city = document.getElementById('ai-report-city').value.trim() || 'Ibirubá - RS';
             const issueDate = new Date().toLocaleDateString('pt-BR');
 
             const primaryColor = [15, 118, 110]; // #0F766E Teal
@@ -631,52 +822,48 @@
 
             // 1. TÍTULO CENTRALIZADO
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(16);
+            doc.setFontSize(15);
             doc.setTextColor(navyColor[0], navyColor[1], navyColor[2]);
-            doc.text("RELATÓRIO DE COMPROVAÇÃO E APURAÇÃO DE PLANTÕES MÉDICOS", 105, 20, { align: "center" });
+            doc.text("RELATÓRIO DE APURAÇÃO DE PLANTÕES MÉDICOS", 105, 20, { align: "center" });
 
-            doc.setFontSize(10);
+            doc.setFontSize(9.5);
             doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-            doc.text("DOCUMENTO OFICIAL DE FECHAMENTO DE CARGA HORÁRIA E ESCALAS", 105, 26, { align: "center" });
+            doc.text("DEMONSTRATIVO DE CARGA HORÁRIA - SUJEITO À CONFERÊNCIA DA CONTRATANTE", 105, 26, { align: "center" });
 
             doc.setDrawColor(200, 200, 200);
             doc.setLineWidth(0.5);
             doc.line(14, 30, 196, 30);
 
-            // 2. IDENTIFICAÇÃO E TEXTO JUSTIFICADO
+            // 2. IDENTIFICAÇÃO
             doc.setFont("helvetica", "bold");
             doc.setFontSize(10);
             doc.setTextColor(40, 40, 40);
-            doc.text(`Profissional Realizante: ${currentAuditData.prof.name}`, 14, 38);
+            doc.text(`Profissional Realizante: ${prof.name}`, 14, 38);
             doc.setFont("helvetica", "normal");
-            doc.text(`CRM: ${currentAuditData.prof.crm || 'N/D'}  |  Especialidade / Função: ${currentAuditData.prof.spec}`, 14, 43);
-            doc.text(`Período de Apuração: ${monthNames[currentAuditData.month - 1]} de ${currentAuditData.year}`, 14, 48);
+            doc.text(`CRM: ${prof.crm || 'Não informado'}  |  Especialidade / Função: ${prof.spec || 'Não informada'}`, 14, 43);
+            doc.text(`Período de Apuração: ${monthNames[month - 1]} de ${year}`, 14, 48);
 
-            // Texto Justificado
-            const justificativa = `Certificamos para os devidos fins de direito e controle administrativo que o profissional médico acima nominado e qualificado realizou com zelo, pontualidade e dedicação as escalas e plantões médicos discriminados no presente demonstrativo, em estrita conformidade com as diretrizes assistenciais de cada unidade hospitalar e contratante. Os registros e cômputos horários foram apurados pelo sistema inteligente e conferidos pelas respectivas direções técnicas.`;
-
+            // Texto declaratório: o sistema não pode afirmar conferência que não ocorreu
+            const declaracao = `Declaro, para fins de controle administrativo e conferência pela contratante, que realizei os plantões médicos discriminados neste demonstrativo. Os horários e a carga horária foram apurados automaticamente a partir dos lançamentos registrados na agenda do profissional e somente terão validade após conferência e assinatura da direção técnica ou administrativa da respectiva unidade.`;
             doc.setFontSize(9);
             doc.setTextColor(60, 60, 60);
-            const splitJustificativa = doc.splitTextToSize(justificativa, 182);
-            doc.text(splitJustificativa, 14, 55, { align: "justify", maxWidth: 182 });
+            const lines = doc.splitTextToSize(declaracao, 182);
+            doc.text(lines, 14, 55, { align: "justify", maxWidth: 182 });
+            const tableStartY = 55 + lines.length * 4.2 + 5;
 
             // 3. TABELA DE PLANTÕES (AutoTable)
-            const tableRows = [];
-            currentAuditData.shiftEvents.forEach(e => {
-                const loc = locations.find(l => l.id === e.locId) || { name: 'Hospital' };
-                tableRows.push([
-                    `${String(e.date).padStart(2,'0')}/${String(e.month).padStart(2,'0')}/${e.year}`,
-                    loc.name,
-                    e.text,
-                    `${parseFloat(e.hours).toFixed(1)} h`
-                ]);
+            const tableRows = shiftEvents.map(e => {
+                const loc = locations.find(l => l.id === e.locId) || { name: 'Local removido' };
+                return [fmtDate(e), loc.name, e.text, `${fmtHours(e.hours)} h`];
             });
 
             doc.autoTable({
-                startY: 75,
+                startY: tableStartY,
+                margin: { top: 20, bottom: 22, left: 14, right: 14 },
                 head: [['Data', 'Local de Realização (Hospital / Unidade)', 'Horário / Escala', 'Horas Apuradas']],
                 body: tableRows,
-                foot: [['', '', 'CARGA HORÁRIA TOTAL DE PLANTÕES:', `${currentAuditData.grandTotalHours.toFixed(1)} h`]],
+                foot: [['', '', 'CARGA HORÁRIA TOTAL:', `${fmtHours(grandTotalHours)} h`]],
+                showFoot: 'lastPage',
                 theme: 'grid',
                 headStyles: { fillColor: primaryColor, textColor: 255, fontStyle: 'bold', halign: 'left' },
                 footStyles: { fillColor: navyColor, textColor: 255, fontStyle: 'bold', halign: 'right' },
@@ -690,32 +877,25 @@
             });
 
             let finalY = doc.lastAutoTable.finalY + 15;
+            if (finalY > 235) { doc.addPage(); finalY = 30; }
 
-            // Se estiver muito próximo do rodapé, cria uma nova página
-            if (finalY > 230) {
-                doc.addPage();
-                finalY = 30;
-            }
-
-            // 4. BLOCO DE ASSINATURAS DO PROFISSIONAL E DA EMPRESA
+            // 4. BLOCO DE ASSINATURAS DO PROFISSIONAL E DA CONTRATANTE
             doc.setFont("helvetica", "normal");
             doc.setFontSize(9);
             doc.setTextColor(50, 50, 50);
-
-            // Linha da Esquerda: Profissional
+            doc.setDrawColor(120, 120, 120);
             doc.line(20, finalY + 15, 90, finalY + 15);
-            doc.text(currentAuditData.prof.name, 55, finalY + 20, { align: "center" });
+            doc.text(doc.splitTextToSize(prof.name, 70)[0], 55, finalY + 20, { align: "center" });
             doc.setFontSize(8);
-            doc.text("Profissional Realizante", 55, finalY + 24, { align: "center" });
+            doc.text(`Profissional Realizante${prof.crm ? ' - CRM ' + prof.crm : ''}`, 55, finalY + 24, { align: "center" });
 
-            // Linha da Direita: Empresa / Hospital
             doc.line(120, finalY + 15, 190, finalY + 15);
             doc.setFontSize(9);
-            doc.text("Direção Médica / Administrativa", 155, finalY + 20, { align: "center" });
+            doc.text("Direção Técnica / Administrativa", 155, finalY + 20, { align: "center" });
             doc.setFontSize(8);
-            doc.text("Empresa / Unidade Hospitalar", 155, finalY + 24, { align: "center" });
+            doc.text("Carimbo e assinatura da contratante", 155, finalY + 24, { align: "center" });
 
-            // 5. RODAPÉ FIXO EM TODAS AS PÁGINAS
+            // 5. RODAPÉ EM TODAS AS PÁGINAS
             const pageCount = doc.internal.getNumberOfPages();
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
@@ -724,90 +904,155 @@
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(8);
                 doc.setTextColor(120, 120, 120);
-                doc.text(`Profissional: ${currentAuditData.prof.name} | Data de Emissão: ${issueDate} | Local: ${city}`, 14, 287);
+                doc.text(doc.splitTextToSize(`Profissional: ${prof.name} | Emissão: ${issueDate} | Local: ${city}`, 160)[0], 14, 287);
                 doc.text(`Página ${i} de ${pageCount}`, 196, 287, { align: "right" });
             }
 
-            // Salva o PDF
-            const cleanProfName = currentAuditData.prof.name.replace(/\s+/g, '_');
-            doc.save(`Apuracao_Plantoes_${cleanProfName}_${currentAuditData.month}_${currentAuditData.year}.pdf`);
+            doc.save(`Apuracao_Plantoes_${safeFileName(prof.name)}_${pad2(month)}_${year}.pdf`);
         }
 
         // =========================================================================
         // AUTENTICAÇÃO E PERFIS
         // =========================================================================
-        let authUser = JSON.parse(localStorage.getItem('pokulai_auth_user_visual')) || null;
-
         async function handleLogin() {
-            const user = document.getElementById('login-user').value.trim() || 'Médico Padrão';
-            const pass = document.getElementById('login-pass').value.trim();
+            const user = document.getElementById('login-user').value.trim();
+            const passEl = document.getElementById('login-pass');
+            const pass = passEl.value; // senhas não devem ser alteradas com trim()
+            const btn = document.getElementById('btn-login');
 
-            if (supabaseClient && user.includes('@')) {
-                // Autenticação Real Supabase
-                const { data, error } = await supabaseClient.auth.signInWithPassword({ email: user, password: pass });
-                if (error) {
-                    alert("Erro na autenticação Supabase: " + error.message);
-                    return;
-                }
-                await checkSupabaseSession();
+            if (supabaseClient) {
+                // Com Supabase configurado, o login local simulado fica DESATIVADO (antes era um bypass)
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user) || !pass) return alert('Informe e-mail e senha válidos.');
+                btn.disabled = true;
+                try {
+                    const { error } = await supabaseClient.auth.signInWithPassword({ email: user, password: pass });
+                    if (error) return alert("Erro na autenticação Supabase: " + error.message);
+                    passEl.value = '';
+                    await checkSupabaseSession();
+                } catch (e) { alert('Falha de conexão com o Supabase: ' + e.message); }
+                finally { btn.disabled = false; }
                 return;
             }
 
-            // Modo Simulação / Teste Local
-            const isAdmin = user.toLowerCase().includes('admin');
+            // Supabase configurado mas indisponível: não cai no login simulado
+            if (supabaseConfig.url) return alert('O Supabase está configurado, mas não pôde ser carregado. Verifique a conexão ou remova a configuração (ícone de engrenagem).');
+
+            // Modo Simulação / Teste Local (sem segurança real)
+            if (!user) return alert("Digite 'admin' ou o nome do profissional.");
+            const isAdmin = norm(user) === 'admin';
+            let prof = null;
+            if (!isAdmin) {
+                const q = norm(user).replace(/^(dr|dra|doutor|doutora)\.?\s+/, '');
+                prof = professionals.find(p => norm(p.name) === norm(user)) || (q.length >= 3 ? professionals.find(p => norm(p.name).includes(q)) : null);
+                if (!prof) {
+                    if (!confirm(`Profissional "${user}" não encontrado. Cadastrar como novo profissional?`)) return;
+                    prof = { id: newId(), name: user, spec: 'Médico', crm: '', email: '' };
+                    professionals.push(prof); saveData();
+                }
+            }
             authUser = {
-                id: 'local-test-uuid',
-                name: isAdmin ? 'Admin' : user,
+                id: 'local',
+                name: isAdmin ? 'Admin' : prof.name,
                 role: isAdmin ? 'admin' : 'doctor',
-                roleLabel: isAdmin ? 'Administrador Geral' : 'Médico',
-                crm: '54.321/RS',
-                profId: isAdmin ? null : 1
+                roleLabel: isAdmin ? 'Administrador (modo local)' : 'Médico (modo local)',
+                profId: isAdmin ? null : prof.id,
+                source: 'local'
             };
-            currentViewProfId = isAdmin ? 0 : 1;
-            localStorage.setItem('pokulai_auth_user_visual', JSON.stringify(authUser));
+            currentViewProfId = isAdmin ? 0 : prof.id;
+            storeJSON('pokulai_auth_user_visual', authUser);
+            passEl.value = '';
             applyAuthState();
         }
 
         async function handleSignUp() {
             const user = document.getElementById('login-user').value.trim();
-            const pass = document.getElementById('login-pass').value.trim();
-            if(!supabaseClient) {
+            const pass = document.getElementById('login-pass').value;
+            if (!supabaseClient) {
                 alert("Para cadastrar usuários no banco de dados, insira a URL e a Anon Key do Supabase nas configurações.");
                 openConfigModal();
                 return;
             }
-            const { data, error } = await supabaseClient.auth.signUp({
-                email: user,
-                password: pass,
-                options: { data: { name: user.split('@')[0], role: 'doctor' } }
-            });
-            if (error) alert("Erro ao cadastrar: " + error.message);
-            else alert("Cadastro efetuado! Verifique seu e-mail ou faça login.");
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user)) return alert('Informe um e-mail válido.');
+            if (pass.length < 8) return alert('A senha deve ter pelo menos 8 caracteres.');
+            try {
+                // O papel (role) NÃO é enviado pelo cliente: deve ser definido no servidor (trigger/RLS)
+                const { error } = await supabaseClient.auth.signUp({ email: user, password: pass, options: { data: { name: user.split('@')[0] } } });
+                if (error) alert("Erro ao cadastrar: " + error.message);
+                else alert("Cadastro efetuado! Verifique seu e-mail para confirmar a conta e depois faça login.");
+            } catch (e) { alert('Falha de conexão com o Supabase: ' + e.message); }
         }
 
         async function handleLogout() {
-            if(supabaseClient) await supabaseClient.auth.signOut();
+            if (supabaseClient) { try { await supabaseClient.auth.signOut(); } catch (e) { console.warn(e); } }
             authUser = null;
-            localStorage.removeItem('pokulai_auth_user_visual');
-            currentViewProfId = 1;
+            storeRemove('pokulai_auth_user_visual');
+            currentViewProfId = 0;
             applyAuthState();
         }
 
-        function openMfaModal() { document.getElementById('mfa-modal').classList.remove('hidden'); }
+        function openMfaModal() {
+            document.getElementById('mfa-enroll-box').classList.add('hidden');
+            document.getElementById('mfa-modal').classList.remove('hidden');
+            refreshMfaStatus();
+        }
         function closeMfaModal() { document.getElementById('mfa-modal').classList.add('hidden'); }
 
+        async function refreshMfaStatus() {
+            const el = document.getElementById('mfa-status-text');
+            const btn = document.getElementById('mfa-enroll-btn');
+            if (!supabaseClient || !authUser || authUser.source !== 'supabase') {
+                el.innerText = 'Indisponível no modo local'; el.className = 'text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700 font-bold';
+                btn.disabled = true; btn.classList.add('opacity-50');
+                return;
+            }
+            btn.disabled = false; btn.classList.remove('opacity-50');
+            try {
+                const { data, error } = await supabaseClient.auth.mfa.listFactors();
+                if (error) throw error;
+                const active = (data.totp || []).some(f => f.status === 'verified');
+                el.innerText = active ? 'Nível 2 (MFA ativo)' : 'Nível 1 (Somente senha)';
+                el.className = 'text-xs px-2 py-0.5 rounded font-bold ' + (active ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800');
+                btn.classList.toggle('hidden', active);
+            } catch (e) { el.innerText = 'Erro: ' + e.message; }
+        }
+
         async function enrollMfaTotp() {
-            if(!supabaseClient) {
-                alert("O MFA está disponível conectado ao Supabase. No ambiente de teste local, o fluxo está simulado.");
+            if (!supabaseClient || !authUser || authUser.source !== 'supabase') {
+                alert("O MFA só está disponível com o Supabase configurado e login por e-mail.");
                 return;
             }
             try {
+                // Remove cadastros TOTP pendentes (não verificados) para evitar fatores órfãos
+                const { data: list } = await supabaseClient.auth.mfa.listFactors();
+                if ((list?.totp || []).some(f => f.status === 'verified')) { alert('O MFA já está ativo nesta conta.'); return; }
+                for (const f of (list?.all || [])) {
+                    if (f.factor_type === 'totp' && f.status !== 'verified') await supabaseClient.auth.mfa.unenroll({ factorId: f.id });
+                }
                 const { data, error } = await supabaseClient.auth.mfa.enroll({ factorType: 'totp' });
-                if(error) throw error;
-                prompt("Copie a chave secreta TOTP abaixo para seu aplicativo autenticador:", data.totp.secret);
-            } catch(e) {
+                if (error) throw error;
+                pendingFactorId = data.id;
+                document.getElementById('mfa-qr').src = data.totp.qr_code;
+                document.getElementById('mfa-secret').innerText = data.totp.secret;
+                document.getElementById('mfa-code').value = '';
+                document.getElementById('mfa-enroll-box').classList.remove('hidden');
+            } catch (e) {
                 alert("Aviso: " + e.message);
             }
+        }
+
+        // Sem esta etapa o fator fica "não verificado" e o MFA nunca é realmente ativado
+        async function verifyMfaEnrollment() {
+            const code = document.getElementById('mfa-code').value.trim();
+            if (!/^\d{6}$/.test(code)) return alert('Informe o código de 6 dígitos.');
+            if (!pendingFactorId) return alert('Inicie a ativação novamente.');
+            try {
+                const { error } = await supabaseClient.auth.mfa.challengeAndVerify({ factorId: pendingFactorId, code });
+                if (error) return alert('Código inválido: ' + error.message);
+                pendingFactorId = null;
+                document.getElementById('mfa-enroll-box').classList.add('hidden');
+                alert('MFA ativado com sucesso! A partir do próximo login o código será solicitado.');
+                refreshMfaStatus();
+            } catch (e) { alert('Falha ao verificar: ' + e.message); }
         }
 
         function applyAuthState() {
@@ -822,211 +1067,405 @@
                 document.getElementById('auth-user-name').innerText = authUser.name;
                 document.getElementById('auth-user-role').innerText = authUser.roleLabel;
 
-                if(authUser.role === 'admin') {
+                if (authUser.role === 'admin') {
                     adminTeamModule.classList.remove('hidden');
                     adminTeamModule.classList.add('flex');
                 } else {
                     adminTeamModule.classList.add('hidden');
                     adminTeamModule.classList.remove('flex');
-                    currentViewProfId = authUser.profId || 1;
+                    if (!professionals.some(p => p.id === authUser.profId)) {
+                        // Profissional vinculado foi removido: recria o vínculo pelo nome
+                        authUser.profId = linkProfessional({ name: authUser.name, email: authUser.email }).id;
+                        if (authUser.source === 'local') storeJSON('pokulai_auth_user_visual', authUser);
+                    }
+                    currentViewProfId = authUser.profId;
                 }
             } else {
                 loginContainer.classList.remove('hidden');
                 loggedInContainer.classList.add('hidden');
                 loggedInContainer.classList.remove('flex');
                 adminTeamModule.classList.add('hidden');
+                adminTeamModule.classList.remove('flex');
             }
             renderApp();
         }
 
         // =========================================================================
-        // PROCESSAMENTO DE LINGUAGEM NATURAL (NLP)
+        // PROCESSAMENTO DE LINGUAGEM NATURAL (NLP) — texto e voz
         // =========================================================================
-        function parseNaturalLanguage(text, source) {
-            if (currentViewProfId === 0 && !text.toLowerCase().includes('dr') && !text.toLowerCase().includes('para') && !text.toLowerCase().includes('com')) {
-                alert(`Para agendar na Visão Geral via ${source}, cite o nome do profissional (Ex: "...para Dr. Enrique").`);
-                return;
-            }
+        const MONTHS = { janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12 };
+        const MONTH_RE = '(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)';
+        // O reconhecimento de voz costuma devolver números por extenso ("dia cinco", "das sete às dezenove")
+        const NUM_WORDS = { zero: 0, um: 1, uma: 1, primeiro: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13, catorze: 14, quatorze: 14, quinze: 15, dezesseis: 16, dezasseis: 16, dezessete: 17, dezassete: 17, dezoito: 18, dezenove: 19, dezanove: 19, vinte: 20, trinta: 30 };
 
-            const txtLower = text.toLowerCase();
-            const dayMatch = txtLower.match(/dia (\d{1,2})/);
-            const dateVal = dayMatch ? parseInt(dayMatch[1]) : null;
-
-            let monthVal = viewingMonth;
-            let yearVal = viewingYear;
-            const months = { 'janeiro':1, 'fevereiro':2, 'março':3, 'abril':4, 'maio':5, 'junho':6, 'julho':7, 'agosto':8, 'setembro':9, 'outubro':10, 'novembro':11, 'dezembro':12 };
-            const monthMatch = txtLower.match(/(?:de |em )?(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)/);
-            if (monthMatch) {
-                monthVal = months[monthMatch[1]];
-                if (monthVal < viewingMonth) yearVal++;
-            }
-
-            let startHour = null, endHour = null, fallbackTimeText = "Plantão";
-            const durMatch = txtLower.match(/(?:início|inicio|começa|começando)(?: às| as| a)? *(\d{1,2})(?:h|:\d{2})?.*duração(?: de)? *(\d{1,2}) *(?:horas|h)/);
-            if (durMatch) {
-                startHour = parseInt(durMatch[1]);
-                let dur = parseInt(durMatch[2]);
-                endHour = (startHour + dur) % 24;
-            } else {
-                const timeMatch = txtLower.match(/(?:das|de|dàs) *(\d{1,2})(?:h|:\d{2}| horas?)? *(?:às|até|as|a) *(\d{1,2})(?:h|:\d{2}| horas?| da manhã| da noite)?/);
-                if (timeMatch) {
-                    startHour = parseInt(timeMatch[1]);
-                    endHour = parseInt(timeMatch[2]);
-                } else if (txtLower.includes('aviso')) {
-                    fallbackTimeText = "Aviso via " + source;
-                }
-            }
-
-            let locationName = null;
-            const localMatch = txtLower.match(/(?:em|no|na|para) ([a-záâãéêíóôõúçA-Z]+)/);
-            if (localMatch && localMatch[1] && localMatch[1].trim() !== 'dr' && localMatch[1].trim() !== 'dra') {
-                locationName = localMatch[1].trim().replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
-            }
-
-            let targetProfId = currentViewProfId !== 0 ? currentViewProfId : null;
-            const profMatch = txtLower.match(/(?:para|com|dr\.|dra\.|dr|dra) ([a-záâãéêíóôõúçA-Z\s]+?)(?= em| no| na| dia| das| de|$)/);
-            if (profMatch) {
-                const searchName = profMatch[1].trim().toLowerCase();
-                const foundProf = professionals.find(p => p.name.toLowerCase().includes(searchName));
-                if (foundProf) targetProfId = foundProf.id;
-            }
-
-            if (!targetProfId && currentViewProfId === 0) { logAction(text, "Profissional não identificado."); return; }
-
-            if (dateVal && locationName) {
-                let targetLoc = locations.find(l => l.name.toLowerCase() === locationName.toLowerCase());
-                if (!targetLoc) targetLoc = addNewLocation(locationName);
-
-                const defaultType = targetLoc.locType || 'plantao';
-                let eventsToCreate = [];
-
-                if (startHour !== null && endHour !== null) {
-                    if (startHour > endHour) {
-                        eventsToCreate.push({ dateOff: 0, text: `das ${String(startHour).padStart(2,'0')}h às 24h`, hours: 24 - startHour });
-                        eventsToCreate.push({ dateOff: 1, text: `das 00h às ${String(endHour).padStart(2,'0')}h`, hours: endHour });
-                    } else {
-                        eventsToCreate.push({ dateOff: 0, text: `das ${String(startHour).padStart(2,'0')}h às ${String(endHour).padStart(2,'0')}h`, hours: endHour - startHour });
-                    }
-                } else {
-                    eventsToCreate.push({ dateOff: 0, text: fallbackTimeText, hours: 0 });
-                }
-
-                eventsToCreate.forEach((evObj, index) => {
-                    let targetDate = new Date(yearVal, monthVal - 1, dateVal + evObj.dateOff);
-                    events.push({
-                        id: Date.now() + index, profId: targetProfId, locId: targetLoc.id,
-                        date: targetDate.getDate(), month: targetDate.getMonth() + 1, year: targetDate.getFullYear(),
-                        text: evObj.text, type: defaultType, hours: evObj.hours, examsCount: 0
-                    });
-                });
-
-                targetLoc.expanded = true; saveData(); logAction(text, `Salvo com sucesso: Dia ${dateVal}/${monthVal} em ${targetLoc.name}`);
-                viewingMonth = monthVal; viewingYear = yearVal; renderApp();
-            } else { logAction(text, `Faltou dia ou local.`); }
+        function wordsToDigits(t) {
+            t = t.replace(/\bmeia[- ]noite\b/g, '0h').replace(/\bmeio[- ]dia\b/g, '12h');
+            t = t.replace(/\b(vinte|trinta) e (um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove)\b/g, (_, a, b) => String(NUM_WORDS[a] + NUM_WORDS[b]));
+            return t.replace(/\b[a-z]+\b/g, w => (Object.prototype.hasOwnProperty.call(NUM_WORDS, w) ? String(NUM_WORDS[w]) : w));
         }
 
-        function logAction(transcript, resultStr) { voiceLogs.unshift({ time: new Date().toLocaleTimeString('pt-BR'), transcript, resultStr }); if(voiceLogs.length > 10) voiceLogs.pop(); saveData(); renderApp(); }
-        function handleTextCommandSubmit(e) { if (e.key === 'Enter') processTextInput(); }
-        function processTextInput() { const inputEl = document.getElementById('nlp-text-input'); const text = inputEl.value.trim(); if(text) { parseNaturalLanguage(text, "Texto"); inputEl.value = ''; } }
+        const TIME_TOKEN = String.raw`(\d{1,2})(?:\s*(?:h|:)\s*(\d{2})?|\s*horas?)?(?:\s+(?:da|de)\s+(manha|tarde|noite|madrugada))?`;
+        function toMinutes(h, m, period) {
+            let hour = parseInt(h, 10);
+            const min = m ? parseInt(m, 10) : 0;
+            if ((period === 'tarde' || period === 'noite') && hour < 12) hour += 12;
+            if (period === 'madrugada' && hour === 12) hour = 0;
+            if (!(hour >= 0 && hour <= 24) || !(min >= 0 && min <= 59) || (hour === 24 && min > 0)) return null;
+            return hour * 60 + min;
+        }
+
+        // Interpreta faixas de horário: "das 19 às 7", "17:30 às 07:00", "19h30 até 7h", "das sete da noite às sete",
+        // "início às 19h com duração de 12 horas". Retorna { startMin, durationMin } ou null.
+        function parseTimeRange(rawText) {
+            let t = wordsToDigits(norm(rawText));
+            t = t.replace(/\b(\d{1,2})\s*h?\s+e\s+meia\b/g, '$1:30');
+            const dur = t.match(new RegExp(String.raw`(?:inicio|inicia|comeca|comecando|entrada)(?:\s+(?:as|a))?\s*` + TIME_TOKEN + String.raw`.*?duracao(?:\s+de)?\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:horas|h)`));
+            if (dur) {
+                const s = toMinutes(dur[1], dur[2], dur[3]);
+                const d = Math.round(parseFloat(dur[4].replace(',', '.')) * 60);
+                if (s !== null && d > 0 && d <= 48 * 60) return { startMin: s % 1440, durationMin: d };
+            }
+            // 1) com prefixo "das/de/da": "das 19 as 7"
+            // 2) sem prefixo, exigindo marcador de hora no primeiro horário: "17:30 as 07:00", "19h - 7h"
+            const sep = String.raw`\s*(?:as|ate|a|-)\s*`;
+            const range = t.match(new RegExp(String.raw`(?:^|[\s(,])(?:das|de|da)\s+` + TIME_TOKEN + sep + TIME_TOKEN))
+                || t.match(new RegExp(String.raw`(?:^|[\s(,])(\d{1,2})(?:\s*(?:h|:)\s*(\d{2})?)(?:\s+(?:da|de)\s+(manha|tarde|noite|madrugada))?` + sep + TIME_TOKEN));
+            if (!range) return null;
+            let s = toMinutes(range[1], range[2], range[3]);
+            let e = toMinutes(range[4], range[5], range[6]);
+            if (s === null || e === null) return null;
+            if (s === 1440) s = 0;
+            const durationMin = e > s ? e - s : (e === s ? 1440 : e + 1440 - s); // igual = 24h; menor = vira a noite
+            return { startMin: s, durationMin };
+        }
+
+        // Divide um plantão nas viradas de meia-noite (contabilização correta por dia e por mês)
+        function splitByMidnight(startMin, durationMin) {
+            const segs = [];
+            let offset = 0, s = startMin, remaining = durationMin;
+            while (remaining > 0) {
+                const len = Math.min(remaining, 1440 - s);
+                segs.push({ dayOffset: offset, startMin: s, endMin: s + len });
+                remaining -= len; s = 0; offset++;
+            }
+            return segs;
+        }
+
+        function eventInterval(ev) {
+            if (Number.isFinite(ev.startMin) && Number.isFinite(ev.endMin)) return [ev.startMin, ev.endMin];
+            const r = parseTimeRange(ev.text || '');
+            return r ? [r.startMin, r.startMin + r.durationMin] : null;
+        }
+
+        // Conflitos do mesmo profissional no mesmo dia (inclui plantão da véspera que atravessa a meia-noite)
+        function findConflicts(profId, year, month, day, s, e) {
+            const prev = new Date(year, month - 1, day - 1);
+            return events.filter(ev => {
+                if (ev.profId !== profId) return false;
+                const iv = eventInterval(ev);
+                if (!iv) return false;
+                if (ev.year === year && ev.month === month && ev.date === day) return iv[0] < e && s < iv[1];
+                if (ev.year === prev.getFullYear() && ev.month === prev.getMonth() + 1 && ev.date === prev.getDate() && iv[1] > 1440) return s < iv[1] - 1440;
+                return false;
+            });
+        }
+
+        function parseDateFromText(t) {
+            let day = null, month = null, year = null;
+            const today = new Date();
+            const dm = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+            if (dm) {
+                day = +dm[1]; month = +dm[2];
+                if (dm[3]) year = dm[3].length === 2 ? 2000 + +dm[3] : +dm[3];
+            } else {
+                const mm = t.match(new RegExp(String.raw`\b` + MONTH_RE + String.raw`\b`));
+                if (mm) month = MONTHS[mm[1]];
+                const d1 = t.match(/\bdia\s+(\d{1,2})\b/);
+                if (d1) day = +d1[1];
+                else if (mm) { const d2 = t.match(new RegExp(String.raw`\b(\d{1,2})\s+de\s+` + mm[1])); if (d2) day = +d2[1]; }
+                const y = t.match(/\b(20\d{2})\b/);
+                if (y) year = +y[1];
+                if (!day) {
+                    const rel = /\bdepois de amanha\b/.test(t) ? 2 : /\bamanha\b/.test(t) ? 1 : /\bhoje\b/.test(t) ? 0 : null;
+                    if (rel !== null) { const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + rel); return { day: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear() }; }
+                }
+            }
+            if (!day) return { error: 'Não identifiquei o dia (ex.: "dia 5", "5/10", "amanhã").' };
+            if (month !== null && (month < 1 || month > 12)) return { error: `Mês inválido: ${month}.` };
+            if (month === null) { month = viewingMonth; if (!year) year = viewingYear; }
+            if (!year) {
+                // Ano mais próximo de hoje: permite lançar plantões passados (apuração) e futuros (escala)
+                const candidates = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1];
+                year = candidates.reduce((best, y) => Math.abs(new Date(y, month - 1, Math.min(day, daysInMonth(y, month))) - today) < Math.abs(new Date(best, month - 1, Math.min(day, daysInMonth(best, month))) - today) ? y : best);
+            }
+            const max = daysInMonth(year, month);
+            if (day < 1 || day > max) return { error: `Data inválida: ${monthNames[month - 1]} de ${year} tem ${max} dias.` };
+            return { day, month, year };
+        }
+
+        const LOC_STOP = String.raw`(?=\s+(?:dia|das|do\s+dia|de\s+\d|as\s+\d|a\s+partir|com|para|pra|ate|inicio|comeca|comecando|entrada|hoje|amanha|depois|plantao|exame)\b|\s*[,;.]|\s+\d|$)`;
+        const CONNECTORS = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+        const GENERIC_LOC_WORDS = new Set(['hospital', 'clinica', 'pronto', 'atendimento', 'unidade', 'posto', 'centro', 'upa', 'pa', 'ps', 'municipal', 'regional']);
+
+        // Encontra o local citado: aceita parte do nome ("Planalto" -> "Pronto Atendimento Municipal Planalto")
+        function matchLocation(candidate) {
+            const ct = tokens(candidate).filter(w => !CONNECTORS.has(w));
+            if (!ct.length) return { match: null };
+            const exact = locations.filter(l => norm(l.name).trim() === norm(candidate).trim());
+            if (exact.length === 1) return { match: exact[0] };
+            const hits = locations.filter(l => { const lt = tokens(l.name); return ct.every(w => lt.some(x => x === w || (w.length >= 4 && x.startsWith(w)))); });
+            if (hits.length === 1) return { match: hits[0] };
+            if (hits.length > 1) return { ambiguous: hits };
+            return { match: null };
+        }
+
+        function resolveLocation(original, base) {
+            const markerRe = /(?:^|\s)(?:em|no|na|nos|nas|pro|pra|para o|para a)\s+/g;
+            const candidates = [];
+            let m;
+            while ((m = markerRe.exec(base)) !== null) {
+                const startIdx = m.index + m[0].length;
+                const rest = base.slice(startIdx);
+                const cm = rest.match(new RegExp('^([a-z][a-z0-9 \'-]*?)' + LOC_STOP));
+                if (!cm) continue;
+                const phrase = cm[1].trim();
+                const first = phrase.split(/\s+/)[0];
+                if (!phrase || ['dr', 'dra', 'doutor', 'doutora'].includes(first) || MONTHS[first]) continue;
+                candidates.push({ phrase, start: startIdx, end: startIdx + cm[1].length });
+            }
+            for (const c of candidates) {
+                // tenta a frase inteira e depois versões mais curtas ("planalto plantao noturno" -> "planalto")
+                const words = c.phrase.split(/\s+/);
+                for (let n = words.length; n >= 1; n--) {
+                    const sub = words.slice(0, n).join(' ');
+                    if (n < words.length && words.slice(0, n).every(w => GENERIC_LOC_WORDS.has(w) || CONNECTORS.has(w))) break;
+                    const r = matchLocation(sub);
+                    if (r.match) return { loc: r.match, span: c };
+                    if (r.ambiguous) return { error: `Local ambíguo "${sub}": ${r.ambiguous.map(l => l.name).join(', ')}. Especifique melhor.` };
+                }
+            }
+            // Sem marcador: procura o nome completo de algum local no texto
+            const direct = locations.filter(l => base.includes(norm(l.name)));
+            if (direct.length === 1) return { loc: direct[0], span: null };
+            if (candidates.length) {
+                const c = candidates[0];
+                const display = original.slice(c.start, c.end).trim().replace(/(^|\s)(\S)/g, (_, sp, ch) => sp + ch.toUpperCase());
+                return { newName: display, span: c };
+            }
+            return { error: 'Não identifiquei o local (ex.: "em Planalto", "no Hospital São Lucas").' };
+        }
+
+        const TITLE_WORDS = new Set(['dr', 'dra', 'doutor', 'doutora', 'para', 'pra', 'pro', 'com']);
+        function resolveProfessional(base, span) {
+            // Remove o trecho do local para não confundir "Santa Maria" (hospital) com "Dra. Maria"
+            const text = span ? base.slice(0, span.start) + ' '.repeat(span.end - span.start) + base.slice(span.end) : base;
+            const words = tokens(text);
+            const scored = professionals.map(p => {
+                const pt = tokens(p.name).filter(w => w.length >= 3 && !TITLE_WORDS.has(w));
+                let score = 0, titled = false;
+                pt.forEach(tok => {
+                    const idx = words.indexOf(tok);
+                    if (idx >= 0) { score++; if (idx > 0 && TITLE_WORDS.has(words[idx - 1])) titled = true; }
+                });
+                return { p, score, strong: titled || score >= 2 };
+            }).filter(s => s.score > 0);
+            const strong = scored.filter(s => s.strong).sort((a, b) => b.score - a.score);
+            const pool = strong.length ? strong : (currentViewProfId === 0 ? scored.sort((a, b) => b.score - a.score) : []);
+            if (!pool.length) return { prof: null };
+            if (pool.length > 1 && pool[0].score === pool[1].score) return { error: `Profissional ambíguo: ${pool.filter(s => s.score === pool[0].score).map(s => s.p.name).join(', ')}. Use nome e sobrenome.` };
+            return { prof: pool[0].p };
+        }
+
+        function parseNaturalLanguage(text, source) {
+            text = String(text || '').normalize('NFC').slice(0, 500);
+            const base = norm(text);
+            const t = wordsToDigits(base);
+
+            const date = parseDateFromText(t);
+            if (date.error) return logAction(text, date.error, 'error');
+
+            const locRes = resolveLocation(text, base);
+            if (locRes.error) return logAction(text, locRes.error, 'error');
+
+            const profRes = resolveProfessional(base, locRes.span);
+            if (profRes.error) return logAction(text, profRes.error, 'error');
+            let targetProf = profRes.prof || (currentViewProfId !== 0 ? professionals.find(p => p.id === currentViewProfId) : null);
+            if (!targetProf) return logAction(text, `Profissional não identificado. Na Visão Geral, cite o nome (ex.: "...para Dr. Enrique").`, 'error');
+            if (authUser && authUser.role !== 'admin' && targetProf.id !== authUser.profId) return logAction(text, 'Seu perfil só permite lançar na sua própria agenda.', 'error');
+
+            const range = parseTimeRange(text);
+
+            // Só cria o local depois de validar todo o comando (evita locais órfãos/duplicados)
+            let targetLoc = locRes.loc;
+            if (!targetLoc) {
+                if (!confirm(`O local "${locRes.newName}" não está cadastrado. Criar novo local?`)) return logAction(text, 'Cancelado: local não cadastrado.', 'warn');
+                targetLoc = addNewLocation(locRes.newName, { silent: true });
+            }
+            const type = /\bexames?\b/.test(base) ? 'exame' : /\bplantao\b/.test(base) ? 'plantao' : (targetLoc.locType || 'plantao');
+
+            const segments = range ? splitByMidnight(range.startMin, range.durationMin) : [null];
+            const planned = segments.map(seg => {
+                const d = new Date(date.year, date.month - 1, date.day + (seg ? seg.dayOffset : 0));
+                return { seg, date: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear() };
+            });
+
+            if (range) {
+                const conflicts = planned.flatMap(p => findConflicts(targetProf.id, p.year, p.month, p.date, p.seg.startMin, p.seg.endMin));
+                if (conflicts.length) {
+                    const desc = [...new Set(conflicts)].map(c => `${fmtDate(c)} - ${(locations.find(l => l.id === c.locId) || {}).name || 'Local'}: ${c.text}`).join('\n');
+                    if (!confirm(`Conflito de horário para ${targetProf.name}:\n${desc}\n\nLançar mesmo assim?`)) return logAction(text, 'Cancelado por conflito de horário.', 'warn');
+                }
+            }
+
+            const groupId = planned.length > 1 ? newId() : null;
+            planned.forEach(p => {
+                const ev = {
+                    id: newId(), profId: targetProf.id, locId: targetLoc.id,
+                    date: p.date, month: p.month, year: p.year,
+                    text: p.seg ? `das ${fmtMin(p.seg.startMin)} às ${fmtMin(p.seg.endMin)}` : (/\baviso\b/.test(base) ? `Aviso via ${source}` : 'Plantão (horário a definir)'),
+                    type, hours: p.seg ? Math.round((p.seg.endMin - p.seg.startMin) / 60 * 100) / 100 : 0, examsCount: 0
+                };
+                if (p.seg) { ev.startMin = p.seg.startMin; ev.endMin = p.seg.endMin; }
+                if (groupId) ev.groupId = groupId;
+                events.push(ev);
+            });
+
+            targetLoc.expanded = true;
+            viewingMonth = date.month; viewingYear = date.year;
+            if (currentViewProfId !== 0 && currentViewProfId !== targetProf.id) currentViewProfId = targetProf.id;
+            const totalH = range ? fmtHours(range.durationMin / 60) + 'h' : 'sem horário (informe as horas)';
+            saveData();
+            logAction(text, `Salvo: ${targetProf.name} — ${pad2(date.day)}/${pad2(date.month)}/${date.year} em ${targetLoc.name} (${totalH}${planned.length > 1 ? ', dividido na meia-noite' : ''})`, range ? 'ok' : 'warn');
+        }
+
+        function logAction(transcript, resultStr, status = 'ok') {
+            voiceLogs.unshift({ time: new Date().toLocaleTimeString('pt-BR'), transcript: String(transcript), resultStr: String(resultStr), status });
+            if (voiceLogs.length > 10) voiceLogs.length = 10;
+            saveData(); renderApp();
+        }
+        function handleTextCommandSubmit(e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); processTextInput(); } }
+        function processTextInput() { const inputEl = document.getElementById('nlp-text-input'); const text = inputEl.value.trim(); if (text) { inputEl.value = ''; parseNaturalLanguage(text, "Texto"); } }
+
+        function handleAttachment(input) {
+            const file = input.files && input.files[0];
+            if (file) logAction(`Anexo: ${file.name}`, 'A leitura automática de anexos ainda não está implementada — o arquivo NÃO foi processado.', 'warn');
+            input.value = '';
+        }
 
         // =========================================================================
         // RECONHECIMENTO DE VOZ (MICROFONE)
         // =========================================================================
-        let recognitionInstance = null; let isListening = false; let recognitionTimeout = null;
+        let recognitionInstance = null; let isListening = false; let voiceStarting = false; let recognitionTimeout = null;
         let finalVoiceTranscript = '';
 
-        function toggleVoiceCommand() {
+        function setMicUi(active) {
             const btn = document.getElementById('fab-record'); const icon = btn.querySelector('i');
-            if (isListening) { if (recognitionInstance) recognitionInstance.stop(); return; }
-            if(!recognitionInstance) {
+            btn.classList.toggle('bg-red-600', active);
+            btn.classList.toggle('bg-pokulai-brand', !active);
+            btn.classList.toggle('animate-pulse', active);
+            icon.className = active ? 'fas fa-wave-square text-2xl' : 'fas fa-microphone text-xl';
+        }
+
+        function toggleVoiceCommand() {
+            if (isListening || voiceStarting) { try { recognitionInstance && recognitionInstance.stop(); } catch (e) { /* ignora */ } return; }
+            if (!recognitionInstance) {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if (!SpeechRecognition) { alert("Navegador não suporta reconhecimento de voz."); return; }
+                if (!SpeechRecognition) { alert("Este navegador não suporta reconhecimento de voz. Use o Google Chrome ou Edge."); return; }
                 recognitionInstance = new SpeechRecognition();
                 recognitionInstance.lang = 'pt-BR';
                 recognitionInstance.continuous = true;
                 recognitionInstance.interimResults = false;
 
-                recognitionInstance.onstart = function() {
-                    isListening = true;
+                recognitionInstance.onstart = function () {
+                    isListening = true; voiceStarting = false;
                     finalVoiceTranscript = '';
-                    btn.classList.replace('bg-pokulai-brand', 'bg-red-600');
-                    btn.classList.add('animate-pulse');
-                    icon.className = 'fas fa-wave-square text-2xl';
-                    recognitionTimeout = setTimeout(() => { if(isListening && recognitionInstance) recognitionInstance.stop(); }, 60000);
+                    setMicUi(true);
+                    recognitionTimeout = setTimeout(() => { if (isListening && recognitionInstance) recognitionInstance.stop(); }, 60000);
                 };
-                recognitionInstance.onresult = function(event) {
-                    for (let i = event.resultIndex; i < event.results.length; ++i) {
-                        if (event.results[i].isFinal) finalVoiceTranscript += event.results[i][0].transcript + ' ';
-                    }
+                recognitionInstance.onresult = function (event) {
+                    // Reconstrói a partir de todos os resultados finais (evita duplicação no Chrome Android)
+                    finalVoiceTranscript = Array.from(event.results).filter(r => r.isFinal).map(r => r[0].transcript.trim()).join(' ');
                 };
-                recognitionInstance.onend = function() {
-                    isListening = false;
+                recognitionInstance.onerror = function (event) {
+                    const msgs = { 'not-allowed': 'Permissão do microfone negada.', 'service-not-allowed': 'Reconhecimento de voz bloqueado pelo navegador.', 'no-speech': 'Nenhuma fala detectada.', 'audio-capture': 'Nenhum microfone encontrado.', 'network': 'Falha de rede no reconhecimento de voz.' };
+                    if (event.error !== 'aborted') logAction('Comando de voz', msgs[event.error] || ('Erro no reconhecimento: ' + event.error), 'error');
+                };
+                recognitionInstance.onend = function () {
+                    isListening = false; voiceStarting = false;
                     clearTimeout(recognitionTimeout);
-                    btn.classList.replace('bg-red-600', 'bg-pokulai-brand');
-                    btn.classList.remove('animate-pulse');
-                    icon.className = 'fas fa-microphone text-xl';
-                    if(finalVoiceTranscript.trim().length > 0) parseNaturalLanguage(finalVoiceTranscript.trim(), "Voz");
+                    setMicUi(false);
+                    const text = finalVoiceTranscript.trim();
+                    finalVoiceTranscript = '';
+                    if (text.length > 0) parseNaturalLanguage(text, "Voz");
                 };
             }
-            recognitionInstance.start();
+            voiceStarting = true;
+            try { recognitionInstance.start(); }
+            catch (e) { voiceStarting = false; console.warn('Falha ao iniciar reconhecimento:', e); }
         }
 
         // =========================================================================
-        // EXPORTAÇÕES GERAIS (EXCEL, WORD, PDF PADRÃO)
+        // EXPORTAÇÕES GERAIS (EXCEL, WORD, PDF PADRÃO) — mês exibido no calendário
         // =========================================================================
         function getTableDataForExport() {
-            const profEvents = currentViewProfId === 0 ? events.slice() : events.filter(e => e.profId === currentViewProfId);
-            profEvents.sort((a,b) => new Date(a.year, a.month-1, a.date) - new Date(b.year, b.month-1, b.date));
-            const rawData = [];
-            profEvents.forEach(e => {
+            const profEvents = events.filter(e => e.month === viewingMonth && e.year === viewingYear && (currentViewProfId === 0 || e.profId === currentViewProfId));
+            profEvents.sort((a, b) => a.date - b.date || (eventInterval(a)?.[0] ?? 0) - (eventInterval(b)?.[0] ?? 0));
+            return profEvents.map(e => {
                 const loc = locations.find(l => l.id === e.locId); const prof = professionals.find(p => p.id === e.profId);
-                const row = { Data: `${e.date.toString().padStart(2, '0')}/${e.month.toString().padStart(2, '0')}/${e.year}`, Local: loc ? loc.name : 'N/D', Tipo: e.type === 'exame' ? 'Exame' : 'Plantão', Horario: e.text, Horas: parseFloat(e.hours) || 0, Exames: parseInt(e.examsCount) || 0 };
-                if(currentViewProfId === 0) row.Profissional = prof ? prof.name : 'N/D';
-                rawData.push(row);
+                const row = { Data: fmtDate(e) };
+                if (currentViewProfId === 0) row.Profissional = prof ? prof.name : 'N/D';
+                Object.assign(row, { Local: loc ? loc.name : 'N/D', Tipo: e.type === 'exame' ? 'Exame' : 'Plantão', Horario: e.text, Horas: parseFloat(e.hours) || 0, Exames: parseInt(e.examsCount, 10) || 0 });
+                return row;
             });
-            return rawData;
         }
 
         function getReportFileName(ext) {
-            const base = currentViewProfId === 0 ? 'Equipe' : professionals.find(p=>p.id===currentViewProfId).name.replace(/\s+/g, '_');
-            return `Relatorio_${base}_${viewingMonth}_${viewingYear}.${ext}`;
+            const prof = professionals.find(p => p.id === currentViewProfId);
+            const base = currentViewProfId === 0 || !prof ? 'Equipe' : safeFileName(prof.name);
+            return `Relatorio_${base}_${pad2(viewingMonth)}_${viewingYear}.${ext}`;
         }
 
         function exportToExcel() {
-            const data = getTableDataForExport(); if(data.length === 0) return alert("Não há dados para exportar.");
+            const data = getTableDataForExport(); if (data.length === 0) return alert("Não há lançamentos no mês exibido para exportar.");
+            if (!window.XLSX) return alert('Biblioteca de Excel não carregada (verifique a conexão).');
             const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Agenda"); XLSX.writeFile(wb, getReportFileName('xlsx'));
         }
 
         function exportToWord() {
-            const data = getTableDataForExport(); if(data.length === 0) return alert("Não há dados para exportar.");
-            let html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório PokulAI</title></head><body><h1 style="color: #1E3A8A; font-family: sans-serif;">Pokul<span style="color: #0F766E">AI.com</span></h1><h2>Relatório de Plantões e Exames - ${viewingMonth}/${viewingYear}</h2><table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%; font-family: sans-serif;"><tr style="background-color: #0F766E; color: white;"><th>Data</th>${currentViewProfId===0?'<th>Profissional</th>':''}<th>Local</th><th>Tipo</th><th>Horário</th><th>Horas</th><th>Exames</th></tr>`;
-            data.forEach(r => { html += `<tr><td>${r.Data}</td>${currentViewProfId===0?`<td>${r.Profissional}</td>`:''}<td>${r.Local}</td><td>${r.Tipo}</td><td>${r.Horario}</td><td>${r.Horas}</td><td>${r.Exames}</td></tr>`; });
+            const data = getTableDataForExport(); if (data.length === 0) return alert("Não há lançamentos no mês exibido para exportar.");
+            const team = currentViewProfId === 0;
+            let html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório PokulAI</title></head><body><h1 style="color: #1E3A8A; font-family: sans-serif;">Pokul<span style="color: #0F766E">AI.com</span></h1><h2>Relatório de Plantões e Exames - ${monthNames[viewingMonth - 1]}/${viewingYear}</h2><table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%; font-family: sans-serif;"><tr style="background-color: #0F766E; color: white;"><th>Data</th>${team ? '<th>Profissional</th>' : ''}<th>Local</th><th>Tipo</th><th>Horário</th><th>Horas</th><th>Exames</th></tr>`;
+            data.forEach(r => { html += `<tr><td>${esc(r.Data)}</td>${team ? `<td>${esc(r.Profissional)}</td>` : ''}<td>${esc(r.Local)}</td><td>${esc(r.Tipo)}</td><td>${esc(r.Horario)}</td><td>${fmtHours(r.Horas)}</td><td>${r.Exames}</td></tr>`; });
             html += `</table></body></html>`;
             const blob = new Blob(['﻿', html], { type: 'application/msword' });
             const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = getReportFileName('doc');
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
         function exportToPDF() {
-            const { jsPDF } = window.jspdf; const doc = new jsPDF();
-            const data = getTableDataForExport();
+            const data = getTableDataForExport(); if (data.length === 0) return alert("Não há lançamentos no mês exibido para exportar.");
+            const doc = getJsPDF(); if (!doc) return;
+            const team = currentViewProfId === 0;
+            const prof = professionals.find(p => p.id === currentViewProfId);
             const tealColor = [15, 118, 110]; const blueColor = [30, 58, 138];
             doc.setFont("helvetica", "bold"); doc.setFontSize(22);
             doc.setTextColor(blueColor[0], blueColor[1], blueColor[2]); doc.text("Pokul", 14, 20);
             doc.setTextColor(tealColor[0], tealColor[1], tealColor[2]); doc.text("AI.com", 14 + doc.getTextWidth("Pokul"), 20);
-            doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text(currentViewProfId === 0 ? "Visão Geral da Equipe" : "Relatório de Plantões e Exames", 195, 20, { align: "right" });
-            doc.setDrawColor(200, 200, 200); doc.line(14, 25, 195, 25);
+            doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text(team ? "Visão Geral da Equipe" : "Relatório de Plantões e Exames", 196, 20, { align: "right" });
+            doc.setDrawColor(200, 200, 200); doc.line(14, 25, 196, 25);
             doc.setFontSize(12); doc.setTextColor(30, 30, 30);
-            if (currentViewProfId === 0) { doc.text(`Relatório Consolidado de Toda a Equipe`, 14, 35); }
-            else { const prof = professionals.find(p => p.id === currentViewProfId); doc.text(`Profissional: ${prof.name}`, 14, 35); doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.text(`Especialidade / Função: ${prof.spec}`, 14, 40); }
-            const introText = `Este documento certifica a escala prevista para ${viewingMonth}/${viewingYear}. Informações geradas via PokulAI.`;
-            doc.text(doc.splitTextToSize(introText, 180), 14, 50, { align: "justify", maxWidth: 180 });
+            if (team || !prof) { doc.text(`Relatório Consolidado de Toda a Equipe`, 14, 35); }
+            else { doc.text(`Profissional: ${prof.name}`, 14, 35); doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.text(`Especialidade / Função: ${prof.spec || 'Não informada'}`, 14, 40); }
+            doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+            const introText = `Escala registrada para ${monthNames[viewingMonth - 1]} de ${viewingYear}, conforme lançamentos na agenda PokulAI.`;
+            doc.text(doc.splitTextToSize(introText, 182), 14, 50, { align: "justify", maxWidth: 182 });
             let totalH = 0; let totalE = 0;
-            const tableRows = data.map(r => { totalH += r.Horas; totalE += r.Exames; return currentViewProfId === 0 ? [r.Data, r.Profissional, r.Local, r.Tipo, r.Horario, r.Horas+'h', r.Exames] : [r.Data, r.Local, r.Tipo, r.Horario, r.Horas+'h', r.Exames]; });
-            let head = currentViewProfId === 0 ? ['Data', 'Profissional', 'Local', 'Tipo', 'Horário', 'Horas', 'Exames'] : ['Data', 'Local', 'Tipo', 'Horário', 'Horas', 'Exames'];
-            let foot = currentViewProfId === 0 ? ['', '', '', '', 'TOTAIS:', totalH+'h', totalE] : ['', '', '', 'TOTAIS:', totalH+'h', totalE];
-            doc.autoTable({ startY: 65, head: [head], body: tableRows, foot: [foot], headStyles: { fillColor: tealColor, textColor: 255, fontStyle: 'bold' }, footStyles: { fillColor: blueColor, textColor: 255, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [245, 248, 250] }, styles: { font: 'helvetica', fontSize: 9, cellPadding: 4 }, theme: 'grid' });
+            const tableRows = data.map(r => { totalH += r.Horas; totalE += r.Exames; const base = [r.Data]; if (team) base.push(r.Profissional); return base.concat([r.Local, r.Tipo, r.Horario, fmtHours(r.Horas) + 'h', r.Exames]); });
+            const head = team ? ['Data', 'Profissional', 'Local', 'Tipo', 'Horário', 'Horas', 'Exames'] : ['Data', 'Local', 'Tipo', 'Horário', 'Horas', 'Exames'];
+            const foot = team ? ['', '', '', '', 'TOTAIS:', fmtHours(totalH) + 'h', totalE] : ['', '', '', 'TOTAIS:', fmtHours(totalH) + 'h', totalE];
+            doc.autoTable({ startY: 60, margin: { bottom: 15 }, head: [head], body: tableRows, foot: [foot], showFoot: 'lastPage', headStyles: { fillColor: tealColor, textColor: 255, fontStyle: 'bold' }, footStyles: { fillColor: blueColor, textColor: 255, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [245, 248, 250] }, styles: { font: 'helvetica', fontSize: 9, cellPadding: 3 }, theme: 'grid' });
             doc.save(getReportFileName('pdf'));
         }
 
@@ -1034,29 +1473,134 @@
         // GESTÃO DE ENTIDADES (PROFISSIONAIS, LOCAIS, EVENTOS)
         // =========================================================================
         function selectProfessional(profId) { currentViewProfId = profId; renderApp(); }
-        function addNewProfessional() { const name = prompt("Nome do novo profissional:"); if(name) { professionals.push({ id: Date.now(), name: name, spec: 'Novo Profissional', crm: '00000/RS' }); saveData(); renderApp(); } }
+        function addNewProfessional() {
+            const name = (prompt("Nome do novo profissional:") || '').trim();
+            if (!name) return;
+            if (professionals.some(p => norm(p.name) === norm(name))) return alert('Já existe um profissional com esse nome.');
+            const spec = (prompt("Especialidade / Função:", 'Médico') || '').trim();
+            const crm = (prompt("CRM (ex.: 12.345/RS) — deixe em branco se não souber:") || '').trim();
+            const p = { id: newId(), name, spec, crm, email: '' };
+            professionals.push(p); saveData(); selectProfessional(p.id);
+        }
+        function editProfessional(profId) {
+            const p = professionals.find(x => x.id === profId); if (!p) return;
+            const name = prompt('Nome:', p.name); if (name === null) return;
+            if (!name.trim()) return alert('O nome não pode ficar vazio.');
+            const spec = prompt('Especialidade / Função:', p.spec); if (spec === null) return;
+            const crm = prompt('CRM:', p.crm); if (crm === null) return;
+            Object.assign(p, { name: name.trim(), spec: spec.trim(), crm: crm.trim() });
+            saveData(); renderApp();
+        }
+        function deleteProfessional(profId) {
+            const p = professionals.find(x => x.id === profId); if (!p) return;
+            if (authUser && authUser.profId === profId) return alert('Não é possível excluir o profissional vinculado ao usuário conectado.');
+            const n = events.filter(e => e.profId === profId).length;
+            if (!confirm(`Excluir ${p.name}?${n ? `\n\nATENÇÃO: ${n} lançamento(s) deste profissional (todos os meses) serão apagados.` : ''}`)) return;
+            professionals = professionals.filter(x => x.id !== profId);
+            events = events.filter(e => e.profId !== profId);
+            if (currentViewProfId === profId) currentViewProfId = 0;
+            saveData(); renderApp();
+        }
         function toggleLocation(locId) { const loc = locations.find(l => l.id === locId); if (loc) { loc.expanded = !loc.expanded; saveData(); renderApp(); } }
-        function addNewLocation(name = "Novo Local") { const randomColor = colorPalette[Math.floor(Math.random() * colorPalette.length)]; const newLoc = { id: Date.now(), name: name, locType: 'plantao', colorClass: randomColor.bg, dotColor: randomColor.dot, expanded: true }; locations.push(newLoc); saveData(); renderApp(); return newLoc; }
-        function updateLocationName(locId, newName) { const loc = locations.find(l => l.id === locId); if (loc) { loc.name = newName; saveData(); renderApp(); } }
-        function updateLocationType(locId, type) { const loc = locations.find(l => l.id === locId); if (loc) { loc.locType = type; events.forEach(e => { if (e.locId === locId) e.type = type; }); saveData(); renderApp(); } }
-        function deleteLocation(locId) { if(confirm("Excluir este local?")) { locations = locations.filter(l => l.id !== locId); events = events.filter(e => e.locId !== locId); saveData(); renderApp(); } }
-        function addNewEvent(locId, date = 1, text = "Novo Horário") {
+        function addNewLocation(name = "Novo Local", { silent = false } = {}) {
+            // Cores ainda não usadas têm prioridade, para facilitar a leitura do calendário
+            const used = new Set(locations.map(l => l.dotColor));
+            const free = colorPalette.filter(c => !used.has(c.dot));
+            const pool = free.length ? free : colorPalette;
+            const color = pool[Math.floor(Math.random() * pool.length)];
+            const newLoc = { id: newId(), name: String(name).trim() || 'Novo Local', locType: 'plantao', colorClass: color.bg, dotColor: color.dot, expanded: true };
+            locations.push(newLoc);
+            saveData();
+            if (!silent) renderApp();
+            return newLoc;
+        }
+        function updateLocationName(locId, newName) {
+            const loc = locations.find(l => l.id === locId); if (!loc) return;
+            const name = String(newName).replace(/\s+/g, ' ').trim();
+            if (!name) { renderApp(); return; }
+            if (name === loc.name) return;
+            loc.name = name; saveData(); renderApp();
+        }
+        function updateLocationType(locId, type) {
+            const loc = locations.find(l => l.id === locId); if (!loc) return;
+            type = type === 'exame' ? 'exame' : 'plantao';
+            if (loc.locType === type) return;
+            loc.locType = type;
+            const affected = events.filter(e => e.locId === locId && e.type !== type);
+            if (affected.length && confirm(`Aplicar o tipo "${type === 'exame' ? 'Exame' : 'Plantão'}" também aos ${affected.length} lançamento(s) já existentes deste local (todos os meses e profissionais)?\n\nOK = alterar todos (afeta apurações passadas)\nCancelar = só os novos lançamentos usarão o novo tipo`)) {
+                affected.forEach(e => { e.type = type; });
+            }
+            saveData(); renderApp();
+        }
+        function deleteLocation(locId) {
+            const loc = locations.find(l => l.id === locId); if (!loc) return;
+            const n = events.filter(e => e.locId === locId).length;
+            if (!confirm(`Excluir o local "${loc.name}"?${n ? `\n\nATENÇÃO: ${n} lançamento(s) em TODOS os meses e de TODOS os profissionais serão apagados.` : ''}`)) return;
+            locations = locations.filter(l => l.id !== locId); events = events.filter(e => e.locId !== locId); saveData(); renderApp();
+        }
+        function addNewEvent(locId) {
             if (currentViewProfId === 0) { alert("Selecione um profissional específico."); return; }
             const loc = locations.find(l => l.id === locId);
-            events.push({ id: Date.now(), profId: currentViewProfId, locId: locId, date: parseInt(date) || 1, month: viewingMonth, year: viewingYear, text: text, type: loc ? loc.locType : 'plantao', hours: 0, examsCount: 0 });
-            if(loc) loc.expanded = true; saveData(); renderApp();
+            const t = new Date();
+            const day = (t.getMonth() + 1 === viewingMonth && t.getFullYear() === viewingYear) ? t.getDate() : 1;
+            events.push({ id: newId(), profId: currentViewProfId, locId, date: day, month: viewingMonth, year: viewingYear, text: "Novo Horário", type: loc ? loc.locType : 'plantao', hours: 0, examsCount: 0 });
+            if (loc) loc.expanded = true; saveData(); renderApp();
         }
-        function updateEventField(eventId, field, value) { const ev = events.find(e => e.id === eventId); if (ev) { if(field === 'date' || field === 'examsCount') ev[field] = parseInt(value) || 0; else if(field === 'hours') ev[field] = parseFloat(value) || 0; else ev[field] = value; saveData(); renderApp(); } }
-        function deleteEvent(eventId) { events = events.filter(e => e.id !== eventId); saveData(); renderApp(); }
+        function updateEventField(eventId, field, value) {
+            const ev = events.find(e => e.id === eventId); if (!ev) return;
+            let newVal;
+            if (field === 'date') {
+                const d = parseInt(String(value).trim(), 10); const max = daysInMonth(ev.year, ev.month);
+                if (!(d >= 1 && d <= max)) { alert(`Dia inválido. Informe um número entre 1 e ${max}.`); renderApp(); return; }
+                newVal = d;
+            } else if (field === 'examsCount') {
+                newVal = Math.max(0, parseInt(value, 10) || 0);
+            } else if (field === 'hours') {
+                const h = parseFloat(String(value).replace(',', '.'));
+                if (!(h >= 0 && h <= 24)) { alert('Horas inválidas: informe um valor entre 0 e 24.'); renderApp(); return; }
+                newVal = h;
+            } else if (field === 'type') {
+                newVal = value === 'exame' ? 'exame' : 'plantao';
+            } else if (field === 'text') {
+                newVal = String(value).replace(/\s+/g, ' ').trim();
+                if (!newVal) { renderApp(); return; }
+            } else return;
+            if (ev[field] === newVal) return; // evita re-render (e perda de foco) quando nada mudou
+            ev[field] = newVal;
+            if (field === 'text') {
+                // Recalcula as horas automaticamente quando o texto contém uma faixa de horário reconhecível
+                const r = parseTimeRange(newVal);
+                delete ev.startMin; delete ev.endMin;
+                if (r) { ev.hours = Math.min(24, Math.round(r.durationMin / 60 * 100) / 100); ev.startMin = r.startMin; ev.endMin = r.startMin + r.durationMin; }
+            }
+            saveData(); renderApp();
+        }
+        function deleteEvent(eventId) {
+            const ev = events.find(e => e.id === eventId); if (!ev) return;
+            const group = ev.groupId ? events.filter(e => e.groupId === ev.groupId && e.id !== ev.id) : [];
+            if (!confirm(`Excluir o lançamento de ${fmtDate(ev)} (${ev.text})?`)) return;
+            let ids = [eventId];
+            if (group.length && confirm(`Este plantão continua em outro dia (${group.map(fmtDate).join(', ')}). Excluir também essa parte?`)) ids = ids.concat(group.map(g => g.id));
+            events = events.filter(e => !ids.includes(e.id)); saveData(); renderApp();
+        }
 
-        const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+        // Teclas em campos editáveis: Enter confirma, Esc desfaz
+        function editableKey(e, el) {
+            if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+            else if (e.key === 'Escape') { e.stopPropagation(); el.innerText = el.dataset.orig || ''; el.blur(); }
+        }
 
         // =========================================================================
         // RENDERIZAÇÃO PRINCIPAL DO CALENDÁRIO
         // =========================================================================
         function renderApp() {
-            document.getElementById('current-month-display').innerText = `${monthNames[viewingMonth-1]} ${viewingYear}`;
-            if(authUser && authUser.role === 'admin') {
+            if (currentViewProfId !== 0 && !professionals.some(p => p.id === currentViewProfId)) currentViewProfId = 0;
+            const profById = new Map(professionals.map(p => [p.id, p]));
+            const locById = new Map(locations.map(l => [l.id, l]));
+            const editable = (cls, handler, value) => `<span class="${cls} editable-sidebar" contenteditable="true" spellcheck="false" data-orig="${esc(value)}" onkeydown="editableKey(event, this)" onblur="${handler}">${esc(value)}</span>`;
+
+            document.getElementById('current-month-display').innerText = `${monthNames[viewingMonth - 1]} ${viewingYear}`;
+            if (authUser && authUser.role === 'admin') {
                 const profList = document.getElementById('admin-prof-list');
                 let profListHtml = `
                     <div onclick="selectProfessional(0)" class="cursor-pointer flex items-center p-2 rounded transition-colors ${currentViewProfId === 0 ? 'prof-selected' : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'} mb-1">
@@ -1065,51 +1609,54 @@
                         ${currentViewProfId === 0 ? '<i class="fas fa-check text-pokulai-brand dark:text-pokulai-accent text-sm"></i>' : ''}
                     </div>`;
                 profListHtml += professionals.map(p => `
-                    <div onclick="selectProfessional(${p.id})" class="cursor-pointer flex items-center p-2 rounded transition-colors ${p.id === currentViewProfId ? 'prof-selected' : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'}">
+                    <div onclick="selectProfessional(${p.id})" class="group cursor-pointer flex items-center p-2 rounded transition-colors ${p.id === currentViewProfId ? 'prof-selected' : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'}">
                         <div class="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-xs font-bold mr-3"><i class="fas fa-user"></i></div>
-                        <div class="flex-1 min-w-0"><p class="text-sm font-bold truncate">${p.name}</p><p class="text-[10px] opacity-70 truncate">${p.spec}</p></div>
-                        ${p.id === currentViewProfId ? '<i class="fas fa-check text-pokulai-brand dark:text-pokulai-accent text-sm"></i>' : ''}
+                        <div class="flex-1 min-w-0"><p class="text-sm font-bold truncate">${esc(p.name)}</p><p class="text-[10px] opacity-70 truncate">${esc(p.spec)}${p.crm ? ' · CRM ' + esc(p.crm) : ' · <span class="text-amber-600">sem CRM</span>'}</p></div>
+                        <button onclick="event.stopPropagation(); editProfessional(${p.id})" class="text-gray-400 hover:text-pokulai-brand p-1 opacity-60 group-hover:opacity-100" title="Editar"><i class="fas fa-pen text-[10px]"></i></button>
+                        <button onclick="event.stopPropagation(); deleteProfessional(${p.id})" class="text-gray-400 hover:text-red-500 p-1 opacity-60 group-hover:opacity-100" title="Excluir"><i class="fas fa-trash text-[10px]"></i></button>
+                        ${p.id === currentViewProfId ? '<i class="fas fa-check text-pokulai-brand dark:text-pokulai-accent text-sm ml-1"></i>' : ''}
                     </div>`).join('');
                 profList.innerHTML = profListHtml;
             }
 
             const badgeEl = document.getElementById('current-view-badge'); const nameEl = document.getElementById('current-view-name');
-            if (currentViewProfId === 0) { nameEl.innerText = "Visão Geral (Equipe)"; badgeEl.classList.remove('hidden'); badgeEl.classList.add('flex'); }
-            else { const cp = professionals.find(p => p.id === currentViewProfId); if(cp) { nameEl.innerText = cp.name; badgeEl.classList.remove('hidden'); badgeEl.classList.add('flex'); } }
+            const cp = profById.get(currentViewProfId);
+            nameEl.innerText = currentViewProfId === 0 ? "Visão Geral (Equipe)" : (cp ? cp.name : '');
+            badgeEl.classList.remove('hidden'); badgeEl.classList.add('flex');
 
-            const currentEvents = events.filter(e => e.month === viewingMonth && e.year === viewingYear && (currentViewProfId === 0 ? true : e.profId === currentViewProfId));
+            const currentEvents = events.filter(e => e.month === viewingMonth && e.year === viewingYear && (currentViewProfId === 0 || e.profId === currentViewProfId));
 
-            const legendContainer = document.getElementById('legend-container'); legendContainer.innerHTML = '';
+            let legendHtml = '';
             locations.forEach((loc) => {
-                const locEvents = currentEvents.filter(e => e.locId === loc.id).sort((a,b) => a.date - b.date);
-                if(currentViewProfId === 0 && locEvents.length === 0) return;
-                let eventsHtml = locEvents.map(e => {
-                    const prof = professionals.find(p => p.id === e.profId);
-                    const profLabel = currentViewProfId === 0 ? `<div class="text-[9px] font-bold text-pokulai-brand dark:text-pokulai-accent mb-0.5"><i class="fas fa-user-md mr-1"></i>${prof ? prof.name.split(' ')[0] + ' ' + (prof.name.split(' ')[1]||'') : ''}</div>` : '';
+                const locEvents = currentEvents.filter(e => e.locId === loc.id).sort((a, b) => a.date - b.date);
+                if (currentViewProfId === 0 && locEvents.length === 0) return;
+                const eventsHtml = locEvents.map(e => {
+                    const prof = profById.get(e.profId);
+                    const profLabel = currentViewProfId === 0 ? `<div class="text-[9px] font-bold text-pokulai-brand dark:text-pokulai-accent mb-0.5"><i class="fas fa-user-md mr-1"></i>${esc(prof ? shortName(prof.name) : 'Profissional removido')}</div>` : '';
                     return `
                         <li class="flex flex-col bg-gray-50 dark:bg-gray-700/50 p-2 rounded mb-2 group border-l-2 border-${loc.dotColor}-500">
                             <div class="flex items-start justify-between">
-                                <div class="flex-1">${profLabel}<span class="font-bold text-gray-700 dark:text-gray-300">Dia <span class="editable-sidebar" contenteditable="true" onblur="updateEventField(${e.id}, 'date', this.innerText)">${e.date}</span>:</span><span class="text-gray-600 dark:text-gray-400 block mt-1 editable-sidebar" contenteditable="true" onblur="updateEventField(${e.id}, 'text', this.innerText)">${e.text}</span></div>
-                                <button onclick="deleteEvent(${e.id})" class="text-red-400 hover:text-red-600 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash text-xs"></i></button>
+                                <div class="flex-1 min-w-0">${profLabel}<span class="font-bold text-gray-700 dark:text-gray-300">Dia ${editable('', `updateEventField(${e.id}, 'date', this.innerText)`, e.date)}:</span>${editable('text-gray-600 dark:text-gray-400 block mt-1 break-words', `updateEventField(${e.id}, 'text', this.innerText)`, e.text)}</div>
+                                <button onclick="deleteEvent(${e.id})" class="text-red-400 hover:text-red-600 ml-2 opacity-40 group-hover:opacity-100 transition-opacity" title="Excluir lançamento"><i class="fas fa-trash text-xs"></i></button>
                             </div>
                             <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 flex space-x-2 text-[10px]">
                                 <select onchange="updateEventField(${e.id}, 'type', this.value)" class="bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded p-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-pokulai-brand"><option value="plantao" ${e.type === 'plantao' ? 'selected' : ''}>Plantão</option><option value="exame" ${e.type === 'exame' ? 'selected' : ''}>Exame</option></select>
-                                <div class="flex items-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-1"><span class="text-gray-400 font-bold px-1"><i class="far fa-clock"></i></span><input type="number" step="0.5" onblur="updateEventField(${e.id}, 'hours', this.value)" value="${e.hours || 0}" class="w-8 bg-transparent text-center focus:outline-none text-gray-700 dark:text-gray-300"></div>
-                                <div class="flex items-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-1"><span class="text-gray-400 font-bold px-1"><i class="fas fa-file-medical"></i></span><input type="number" onblur="updateEventField(${e.id}, 'examsCount', this.value)" value="${e.examsCount || 0}" class="w-8 bg-transparent text-center focus:outline-none text-gray-700 dark:text-gray-300"></div>
+                                <div class="flex items-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-1" title="Horas"><span class="text-gray-400 font-bold px-1"><i class="far fa-clock"></i></span><input type="number" step="0.5" min="0" max="24" onchange="updateEventField(${e.id}, 'hours', this.value)" value="${Number(e.hours) || 0}" class="w-10 bg-transparent text-center focus:outline-none text-gray-700 dark:text-gray-300"></div>
+                                <div class="flex items-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-1" title="Quantidade de exames"><span class="text-gray-400 font-bold px-1"><i class="fas fa-file-medical"></i></span><input type="number" min="0" onchange="updateEventField(${e.id}, 'examsCount', this.value)" value="${Number(e.examsCount) || 0}" class="w-10 bg-transparent text-center focus:outline-none text-gray-700 dark:text-gray-300"></div>
                             </div>
                         </li>`;
                 }).join('');
                 const isExpanded = loc.expanded !== false; const bodyClass = isExpanded ? '' : 'hidden'; const chevronIcon = isExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
-                legendContainer.innerHTML += `
+                legendHtml += `
                     <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm bg-white dark:bg-gray-800 overflow-hidden text-gray-800 dark:text-gray-200">
                         <div class="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-700 select-none">
-                            <div class="flex items-center flex-1 cursor-pointer" onclick="toggleLocation(${loc.id})"><span class="w-3 h-3 rounded-full bg-${loc.dotColor}-500 mr-2 block"></span></div>
-                            <span class="font-semibold editable-sidebar flex-1 mr-2" contenteditable="true" onblur="updateLocationName(${loc.id}, this.innerText)">${loc.name}</span>
-                            <select onchange="updateLocationType(${loc.id}, this.value)" class="text-[9px] uppercase font-bold bg-transparent border-b border-dashed border-gray-400 text-gray-500 dark:text-gray-400 focus:outline-none mr-2 cursor-pointer"><option value="plantao" ${loc.locType !== 'exame' ? 'selected' : ''}>Plantão</option><option value="exame" ${loc.locType === 'exame' ? 'selected' : ''}>Exames</option></select>
+                            <div class="flex items-center cursor-pointer" onclick="toggleLocation(${loc.id})"><span class="w-3 h-3 rounded-full bg-${loc.dotColor}-500 mr-2 block"></span></div>
+                            ${editable('font-semibold flex-1 min-w-0 mr-2 break-words', `updateLocationName(${loc.id}, this.innerText)`, loc.name)}
+                            <select onchange="updateLocationType(${loc.id}, this.value)" class="text-[9px] uppercase font-bold bg-transparent border-b border-dashed border-gray-400 text-gray-500 dark:text-gray-400 focus:outline-none mr-2 cursor-pointer" title="Tipo padrão deste local"><option value="plantao" ${loc.locType !== 'exame' ? 'selected' : ''}>Plantão</option><option value="exame" ${loc.locType === 'exame' ? 'selected' : ''}>Exames</option></select>
                             <div class="flex items-center">
                                 <span class="text-[10px] bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded mr-2">${locEvents.length}</span>
                                 <button onclick="toggleLocation(${loc.id})" class="text-gray-500 dark:text-gray-400 hover:text-pokulai-brand mr-2 p-1"><i class="fas ${chevronIcon}"></i></button>
-                                <button onclick="deleteLocation(${loc.id})" class="text-gray-400 hover:text-red-500 p-1"><i class="fas fa-times"></i></button>
+                                <button onclick="deleteLocation(${loc.id})" class="text-gray-400 hover:text-red-500 p-1" title="Excluir local"><i class="fas fa-times"></i></button>
                             </div>
                         </div>
                         <div class="p-2 border-t border-gray-200 dark:border-gray-700 text-sm ${bodyClass}">
@@ -1118,59 +1665,63 @@
                         </div>
                     </div>`;
             });
+            document.getElementById('legend-container').innerHTML = legendHtml || '<p class="text-gray-400 italic text-xs">Nenhum lançamento neste mês.</p>';
 
             const voiceContainer = document.getElementById('voice-log-container');
-            if(voiceLogs.length === 0) voiceContainer.innerHTML = '<p class="text-gray-400 italic">Nenhum comando utilizado.</p>';
-            else voiceContainer.innerHTML = voiceLogs.map(log => `<div class="bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700"><p class="text-gray-800 dark:text-gray-200 font-medium text-xs">"${log.transcript}"</p><p class="text-gray-500 dark:text-gray-400 text-xs mt-1"><i class="fas fa-check-circle text-green-500 mr-1"></i>${log.resultStr}</p></div>`).join('');
+            const statusIcon = { ok: 'fa-check-circle text-green-500', warn: 'fa-exclamation-triangle text-amber-500', error: 'fa-times-circle text-red-500' };
+            if (voiceLogs.length === 0) voiceContainer.innerHTML = '<p class="text-gray-400 italic">Nenhum comando utilizado.</p>';
+            else voiceContainer.innerHTML = voiceLogs.map(log => `<div class="bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700"><p class="text-gray-800 dark:text-gray-200 font-medium text-xs break-words">"${esc(log.transcript)}" <span class="text-[10px] text-gray-400">${esc(log.time)}</span></p><p class="text-gray-500 dark:text-gray-400 text-xs mt-1 break-words"><i class="fas ${statusIcon[log.status] || statusIcon.ok} mr-1"></i>${esc(log.resultStr)}</p></div>`).join('');
 
-            const calendarBody = document.getElementById('calendar-body'); calendarBody.innerHTML = '';
             const firstDay = new Date(viewingYear, viewingMonth - 1, 1).getDay();
-            const daysInMonth = new Date(viewingYear, viewingMonth, 0).getDate();
+            const totalDays = daysInMonth(viewingYear, viewingMonth);
+            const now = new Date();
+            const emptyCell = `<div class="calendar-day bg-gray-100 dark:bg-gray-900 opacity-40 border-b border-r border-gray-200 dark:border-gray-700"></div>`;
+            let calHtml = emptyCell.repeat(firstDay);
 
-            for (let i = 0; i < firstDay; i++) calendarBody.innerHTML += `<div class="calendar-day bg-gray-100 dark:bg-gray-900 opacity-40 border-b border-r border-gray-200 dark:border-gray-700"></div>`;
+            for (let day = 1; day <= totalDays; day++) {
+                const dayEvents = currentEvents.filter(e => e.date === day).sort((a, b) => (eventInterval(a)?.[0] ?? 0) - (eventInterval(b)?.[0] ?? 0));
+                const isCrowded = new Set(dayEvents.map(e => e.profId)).size >= 2;
 
-            for (let day = 1; day <= daysInMonth; day++) {
-                const dayEvents = currentEvents.filter(e => e.date === day);
-                const uniqueProfs = new Set(dayEvents.map(e => e.profId)).size;
-                const isCrowded = uniqueProfs >= 2;
-
-                let eventsHtml = dayEvents.map(e => {
-                    const loc = locations.find(l => l.id === e.locId);
-                    if(!loc) return '';
+                const eventsHtml = dayEvents.map(e => {
+                    const loc = locById.get(e.locId);
+                    if (!loc) return '';
                     const typeBadge = e.type === 'exame' ? '<i class="fas fa-stethoscope mr-1"></i>' : '<i class="far fa-clock mr-1"></i>';
-                    let profNameHtml = '';
-                    const prof = professionals.find(p => p.id === e.profId);
-                    if (prof) {
-                        const shortName = prof.name.split(' ')[0] + ' ' + (prof.name.split(' ')[1]||'');
-                        profNameHtml = `<span class="font-bold text-xs block text-white truncate pr-3" title="${prof.name}"><i class="fas fa-user-md mr-1"></i>${shortName}</span>`;
-                    }
+                    const prof = profById.get(e.profId);
+                    const profNameHtml = prof ? `<span class="font-bold text-xs block text-white truncate pr-3" title="${esc(prof.name)}"><i class="fas fa-user-md mr-1"></i>${esc(shortName(prof.name))}</span>` : '';
                     const toggleId = `cal-ev-${e.id}`;
                     const toggleAction = isCrowded ? `onclick="document.getElementById('${toggleId}').classList.toggle('hidden'); event.stopPropagation();"` : '';
                     const chevronHtml = isCrowded ? `<i class="fas fa-chevron-down text-[8px] absolute right-1.5 top-1.5 opacity-80"></i>` : '';
-                    const bodyClass = isCrowded ? 'hidden' : '';
-                    const pointerClass = isCrowded ? 'cursor-pointer hover:opacity-90' : '';
-
                     return `
-                    <div class="${loc.colorClass} text-white px-1.5 py-1.5 rounded mb-1 shadow-sm leading-tight relative overflow-hidden ${pointerClass}" ${toggleAction}>
+                    <div class="${loc.colorClass} text-white px-1.5 py-1.5 rounded mb-1 shadow-sm leading-tight relative overflow-hidden ${isCrowded ? 'cursor-pointer hover:opacity-90' : ''}" ${toggleAction}>
                         ${chevronHtml}
                         ${profNameHtml}
-                        <span class="font-normal text-[8px] block opacity-90 mt-0.5 tracking-wide truncate" title="${loc.name}">${typeBadge}${loc.name}</span>
-                        <div id="${toggleId}" class="${bodyClass}"><span class="block text-[10px] mt-1 font-medium bg-black/10 px-1 py-0.5 rounded truncate">${e.text}</span></div>
+                        <span class="font-normal text-[8px] block opacity-90 mt-0.5 tracking-wide truncate" title="${esc(loc.name)}">${typeBadge}${esc(loc.name)}</span>
+                        <div id="${toggleId}" class="${isCrowded ? 'hidden' : ''}"><span class="block text-[10px] mt-1 font-medium bg-black/10 px-1 py-0.5 rounded truncate" title="${esc(e.text)}">${esc(e.text)}</span></div>
                     </div>`;
                 }).join('');
 
-                const isToday = new Date().getDate() === day && new Date().getMonth() + 1 === viewingMonth && new Date().getFullYear() === viewingYear;
-                const conflictStyle = isToday ? 'border-2 border-blue-400 bg-blue-50 dark:bg-blue-900/10' : 'border-b border-r border-gray-200 dark:border-gray-700';
-                calendarBody.innerHTML += `<div class="calendar-day flex flex-col ${conflictStyle}"><div class="text-right text-gray-500 dark:text-gray-400 font-bold mb-1">${day}</div><div class="flex-1 space-y-1">${eventsHtml}</div></div>`;
+                const isToday = now.getDate() === day && now.getMonth() + 1 === viewingMonth && now.getFullYear() === viewingYear;
+                const dayStyle = isToday ? 'border-2 border-blue-400 bg-blue-50 dark:bg-blue-900/10' : 'border-b border-r border-gray-200 dark:border-gray-700';
+                calHtml += `<div class="calendar-day flex flex-col ${dayStyle}"><div class="text-right text-gray-500 dark:text-gray-400 font-bold mb-1">${day}</div><div class="flex-1 space-y-1">${eventsHtml}</div></div>`;
             }
-
-            const totalCells = firstDay + daysInMonth;
-            const remainingCells = (7 - (totalCells % 7)) % 7;
-            for (let i = 0; i < remainingCells; i++) calendarBody.innerHTML += `<div class="calendar-day bg-gray-100 dark:bg-gray-900 opacity-40 border-b border-r border-gray-200 dark:border-gray-700"></div>`;
+            calHtml += emptyCell.repeat((7 - ((firstDay + totalDays) % 7)) % 7);
+            // Uma única atribuição: "innerHTML +=" em laço reprocessava a grade inteira a cada dia
+            document.getElementById('calendar-body').innerHTML = calHtml;
         }
 
-        // Inicialização
+        // =========================================================================
+        // INICIALIZAÇÃO
+        // =========================================================================
+        if (window.innerWidth < 768) document.getElementById('main-sidebar').classList.add('collapsed');
+        syncThemeIcon();
         initSupabase();
+        // O usuário "visual" do modo local só é restaurado quando o Supabase NÃO está configurado
+        if (!supabaseConfig.url) {
+            const saved = loadJSON('pokulai_auth_user_visual', null);
+            if (saved && typeof saved === 'object' && (saved.role === 'admin' || saved.role === 'doctor') && saved.source === 'local') {
+                authUser = { id: 'local', name: String(saved.name || 'Usuário'), role: saved.role, roleLabel: String(saved.roleLabel || ''), profId: saved.profId != null ? Number(saved.profId) : null, source: 'local' };
+            }
+        }
         applyAuthState();
     </script>
 </body>
