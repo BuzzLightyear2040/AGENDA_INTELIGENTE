@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda Médica & Apuração de Plantões - Pokulai</title>
+
+    <script>
+        if (localStorage.getItem('pokulai_theme') === 'dark' || (!('pokulai_theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        pokulai: {
+                            brand: '#0F766E',
+                            sidebar: '#1E293B',
+                            accent: '#0EA5E9',
+                            blueStrong: '#1E3A8A',
+                            background: '#F8FAFC',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Bibliotecas de Exportação (PDF com AutoTable e Excel) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Supabase JS Client v2 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-auto-rows: minmax(130px, 1fr);
+            gap: 1px;
+            background-color: #e2e8f0;
+            border: 1px solid #e2e8f0;
+        }
+        html.dark .calendar-grid {
+            background-color: #374151;
+            border-color: #374151;
+        }
+        .calendar-day { background-color: white; padding: 0.5rem; }
+        html.dark .calendar-day { background-color: #1f2937; }
+        .day-header { text-align: center; font-weight: 600; padding: 0.5rem; background-color: #f1f5f9; }
+        html.dark .day-header { background-color: #111827; color: #d1d5db; }
+
+        .editable-sidebar { cursor: text; border-bottom: 1px dashed rgba(156, 163, 175, 0.5); outline: none; transition: all 0.2s; padding: 2px 4px; border-radius: 4px; }
+        .editable-sidebar:focus { background-color: rgba(0,0,0,0.05); border-bottom-color: #0F766E; }
+        html.dark .editable-sidebar:focus { background-color: rgba(255,255,255,0.1); }
+        .text-dark-override { color: #111827 !important; }
+
+        .prof-selected { border-left: 4px solid #0F766E; background-color: rgba(15, 118, 110, 0.05); }
+        html.dark .prof-selected { background-color: rgba(15, 118, 110, 0.2); }
+
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        #main-sidebar { transition: width 0.3s ease-in-out, opacity 0.3s ease-in-out; }
+        #main-sidebar.collapsed { width: 0; opacity: 0; overflow: hidden; border-right: none; }
+
+        .export-menu { display: none; bottom: 100%; right: 0; margin-bottom: 0.5rem; }
+        .export-btn-group:hover .export-menu { display: flex; flex-direction: column; }
+    </style>
+</head>
+<body class="bg-pokulai-background dark:bg-gray-900 h-screen flex overflow-hidden font-sans relative transition-colors duration-200 text-gray-800 dark:text-gray-100">
+
+    <input type="file" id="chat-attachment" class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg">
+
+    <!-- SIDEBAR -->
+    <aside id="main-sidebar" class="w-96 flex-shrink-0 bg-white dark:bg-pokulai-sidebar border-r border-gray-200 dark:border-gray-700 shadow-lg flex flex-col h-full overflow-y-auto transition-colors duration-200 z-20">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 flex items-center justify-between sticky top-0 z-10 w-96">
+            <h1 class="text-xl font-bold tracking-wide dark:text-white text-gray-800 whitespace-nowrap"><i class="fas fa-stethoscope mr-2 text-pokulai-accent"></i> POKULAI</h1>
+            <button onclick="openConfigModal()" class="text-xs text-gray-500 hover:text-pokulai-brand dark:text-gray-400 p-1" title="Configurar Supabase & MFA">
+                <i class="fas fa-cog text-base"></i>
+            </button>
+        </div>
+
+        <!-- Bloco de Autenticação (Supabase & Simulação) -->
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 transition-colors w-96">
+            <div id="login-form-container">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-[10px] font-bold text-gray-500 uppercase"><i class="fas fa-shield-alt mr-1 text-emerald-600"></i> Autenticação Supabase</h3>
+                    <span id="supabase-status-badge" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Modo Local</span>
+                </div>
+                <input type="text" id="login-user" placeholder="E-mail ou 'admin'" class="w-full mb-2 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:border-pokulai-brand">
+                <input type="password" id="login-pass" placeholder="Senha" class="w-full mb-2 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:border-pokulai-brand">
+
+                <div class="flex space-x-2 mb-2">
+                    <button onclick="handleLogin()" class="flex-1 bg-pokulai-brand text-white p-2 rounded text-xs font-bold hover:bg-teal-600 transition-colors shadow-sm">Entrar</button>
+                    <button onclick="handleSignUp()" class="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 p-2 rounded text-xs font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cadastrar</button>
+                </div>
+                <p class="text-[10px] text-gray-500 text-center">Para testar sem chave Supabase, digite 'admin' ou seu nome e clique em Entrar.</p>
+            </div>
+
+            <div id="logged-in-container" class="hidden flex-col">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-[10px] font-bold text-gray-500 uppercase">Profissional Conectado</h3>
+                    <div class="flex items-center space-x-1">
+                        <button onclick="openMfaModal()" class="text-xs text-amber-600 hover:text-amber-700 font-bold bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded transition-colors" title="Gerenciar Autenticação de 2 Fatores (MFA)"><i class="fas fa-key mr-1"></i> MFA</button>
+                        <button onclick="handleLogout()" class="text-xs text-red-500 hover:text-red-700 font-bold bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded transition-colors"><i class="fas fa-sign-out-alt mr-1"></i> Sair</button>
+                    </div>
+                </div>
+                <div class="flex items-center mt-3 bg-white dark:bg-gray-700 p-2 rounded border border-gray-200 dark:border-gray-600 shadow-sm">
+                    <div class="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-pokulai-brand dark:text-pokulai-accent font-bold mr-3 text-lg"><i class="fas fa-user-md"></i></div>
+                    <div class="flex-1 min-w-0">
+                        <p id="auth-user-name" class="text-sm font-bold text-gray-800 dark:text-white truncate">Nome</p>
+                        <p id="auth-user-role" class="text-[10px] text-gray-500 dark:text-gray-400 truncate">Cargo</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-team-module" class="hidden flex-col mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-[10px] font-bold text-gray-500 uppercase"><i class="fas fa-users mr-1"></i> Equipe e Profissionais</h3>
+                    <button onclick="addNewProfessional()" class="text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"><i class="fas fa-plus"></i> Novo</button>
+                </div>
+                <div id="admin-prof-list" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
+            </div>
+        </div>
+
+        <div id="sidebar-main-content" class="flex-1 flex flex-col w-96">
+            <div class="p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-gray-500 dark:text-gray-400 uppercase text-[10px] font-bold">Gestão de Plantões / Exames</h2>
+                <button onclick="addNewLocation()" class="bg-pokulai-brand hover:bg-teal-600 text-white px-2 py-1 rounded text-xs shadow-sm transition-colors"><i class="fas fa-plus mr-1"></i> Local</button>
+            </div>
+
+            <div class="p-4 flex-1 overflow-y-auto">
+                <div id="legend-container" class="space-y-3 mb-8"></div>
+                <h2 class="text-gray-500 dark:text-gray-400 uppercase text-[10px] font-bold mb-4 border-t border-gray-200 dark:border-gray-700 pt-6"><i class="fas fa-robot text-pokulai-accent"></i> Histórico do Assistente NLP</h2>
+                <div id="voice-log-container" class="space-y-2 text-sm"></div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden relative">
+        <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between shadow-sm transition-colors duration-200 z-30 flex-shrink-0">
+            <div class="flex items-center space-x-4">
+                <button onclick="toggleSidebar()" class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Ocultar/Mostrar Menu Lateral">
+                    <i class="fas fa-bars text-gray-600 dark:text-gray-300 text-xl"></i>
+                </button>
+                <div class="flex items-center space-x-2">
+                    <button onclick="changeMonth(-1)" class="p-1 text-gray-500 hover:text-pokulai-brand"><i class="fas fa-chevron-left"></i></button>
+                    <h2 class="text-2xl font-semibold text-gray-800 dark:text-white" id="current-month-display">Outubro 2026</h2>
+                    <button onclick="changeMonth(1)" class="p-1 text-gray-500 hover:text-pokulai-brand"><i class="fas fa-chevron-right"></i></button>
+                </div>
+                <div id="current-view-badge" class="hidden md:flex items-center text-xs font-bold text-pokulai-brand dark:text-pokulai-accent bg-teal-50 dark:bg-teal-900/30 px-3 py-1.5 rounded-full border border-teal-100 dark:border-teal-800">
+                    <i class="fas fa-calendar-check mr-2"></i> Agenda: <span id="current-view-name" class="ml-1">Dr. Enrique</span>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Alternar Tema Claro/Escuro">
+                    <i id="theme-icon" class="fas fa-moon text-gray-500 dark:text-yellow-400 text-xl"></i>
+                </button>
+                <button onclick="toggleFullScreen()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Tela Cheia">
+                    <i id="fullscreen-icon" class="fas fa-expand text-gray-500 dark:text-gray-400 text-xl"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Grade do Calendário -->
+        <div class="flex-1 flex flex-col p-4 overflow-hidden relative">
+            <div class="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors duration-200 relative">
+                <div class="flex-1 flex flex-col overflow-y-auto relative">
+                    <div class="sticky top-0 z-20 grid grid-cols-7 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 text-sm shadow-sm flex-shrink-0">
+                        <div class="day-header text-red-500 dark:text-red-400">Dom</div><div class="day-header">Seg</div><div class="day-header">Ter</div><div class="day-header">Qua</div><div class="day-header">Qui</div><div class="day-header">Sex</div><div class="day-header text-red-500 dark:text-red-400">Sáb</div>
+                    </div>
+                    <div id="calendar-body" class="calendar-grid flex-1 text-sm relative z-0"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barra inferior de NLP -->
+        <div class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 px-6 flex items-center shadow-lg z-30 transition-colors duration-200 flex-shrink-0">
+            <button onclick="document.getElementById('chat-attachment').click()" class="text-gray-400 hover:text-pokulai-brand dark:hover:text-pokulai-accent transition-colors mr-4 focus:outline-none" title="Anexar arquivo ou foto">
+                <i class="fas fa-plus-circle text-2xl"></i>
+            </button>
+            <div class="flex-1 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center px-4 py-2 border border-gray-300 dark:border-gray-700">
+                <input type="text" id="nlp-text-input" placeholder="Digite o comando... Ex: Agendar Dra. Maria dia 5 de outubro em Planalto das 19 as 7" class="flex-1 bg-transparent border-none focus:outline-none text-gray-700 dark:text-gray-200 text-sm" onkeypress="handleTextCommandSubmit(event)">
+                <button onclick="processTextInput()" class="text-pokulai-brand dark:text-pokulai-accent ml-2 hover:opacity-80 focus:outline-none">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- GRUPO DE BOTÕES FLUTUANTES (FAB) NO CANTO INFERIOR DIREITO -->
+        <div class="absolute bottom-24 right-6 flex flex-col items-center space-y-4 z-50">
+            <!-- 1. Botão IA de Rastreamento e Apuração de Plantões -->
+            <button id="fab-ai-shifts" onclick="openShiftTrackerModal()" class="w-14 h-14 bg-gradient-to-tr from-cyan-600 to-teal-500 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform border-2 border-white dark:border-gray-800 relative group" title="IA Apuração de Plantões & Relatório">
+                <i class="fas fa-brain text-xl"></i>
+                <span class="absolute right-16 bg-gray-900 text-white text-xs px-2.5 py-1 rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    Rastrear Plantões (IA)
+                </span>
+            </button>
+
+            <!-- 2. Microfone com Gravação Contínua -->
+            <button id="fab-record" onclick="toggleVoiceCommand()" class="w-14 h-14 bg-pokulai-brand text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border-2 border-white dark:border-gray-800" title="Comando de Voz Contínuo">
+                <i class="fas fa-microphone text-xl"></i>
+            </button>
+
+            <!-- 3. Exportar -->
+            <div class="relative export-btn-group">
+                <div class="export-menu absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden text-sm">
+                    <button onclick="exportToExcel()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-green-600 font-bold whitespace-nowrap"><i class="fas fa-file-excel mr-2"></i> Exportar Excel</button>
+                    <button onclick="exportToWord()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 font-bold whitespace-nowrap border-y border-gray-100 dark:border-gray-700"><i class="fas fa-file-word mr-2"></i> Exportar Word</button>
+                    <button onclick="exportToPDF()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 font-bold whitespace-nowrap"><i class="fas fa-file-pdf mr-2"></i> Exportar PDF Padrão</button>
+                </div>
+                <button class="w-14 h-14 bg-gray-800 dark:bg-gray-700 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border-2 border-white dark:border-gray-800" title="Exportar Relatórios">
+                    <i class="fas fa-download text-xl"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODAL: APURAÇÃO INTELIGENTE DE PLANTÕES (IA SHIFT TRACKER) -->
+    <div id="ai-shifts-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
+            <!-- Cabeçalho -->
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-teal-800 to-cyan-900 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-teal-300 text-xl font-bold">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg">Inteligência de Apuração de Plantões</h3>
+                        <p class="text-xs text-teal-200">Filtro exclusivo para escalas de plantão hospitalar (desconsidera exames e outros compromissos)</p>
+                    </div>
+                </div>
+                <button onclick="closeShiftTrackerModal()" class="text-white/80 hover:text-white p-2">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Corpo da Apuração -->
+            <div class="p-6 overflow-y-auto space-y-6 text-sm">
+                <!-- Filtros da Auditoria -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 dark:bg-gray-700/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Profissional</label>
+                        <select id="ai-filter-prof" onchange="runShiftAudit()" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Mês / Ano</label>
+                        <div class="flex space-x-2">
+                            <select id="ai-filter-month" onchange="runShiftAudit()" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs"></select>
+                            <input type="number" id="ai-filter-year" value="2026" onchange="runShiftAudit()" class="w-20 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs text-center">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Cidade / Local de Emissão</label>
+                        <input type="text" id="ai-report-city" value="Ibirubá - RS" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs">
+                    </div>
+                </div>
+
+                <!-- Resumo dos Cálculos -->
+                <div id="ai-audit-summary" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-teal-50 dark:bg-teal-900/30 p-4 rounded-lg border border-teal-200 dark:border-teal-800">
+                        <span class="text-xs uppercase font-bold text-teal-700 dark:text-teal-300 block">Total de Horas em Plantão</span>
+                        <span id="ai-total-hours" class="text-3xl font-extrabold text-teal-900 dark:text-teal-100">0h</span>
+                        <span class="text-[11px] text-teal-600 dark:text-teal-400 block mt-1">Apenas escalas do tipo Plantão</span>
+                    </div>
+                    <div class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <span class="text-xs uppercase font-bold text-blue-700 dark:text-blue-300 block">Plantões Identificados</span>
+                        <span id="ai-total-shifts" class="text-3xl font-extrabold text-blue-900 dark:text-blue-100">0</span>
+                        <span class="text-[11px] text-blue-600 dark:text-blue-400 block mt-1">Escalas mapeadas</span>
+                    </div>
+                    <div class="bg-amber-50 dark:bg-amber-900/30 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
+                        <span class="text-xs uppercase font-bold text-amber-700 dark:text-amber-300 block">Hospitais / Unidades</span>
+                        <span id="ai-total-locations" class="text-3xl font-extrabold text-amber-900 dark:text-amber-100">0</span>
+                        <span class="text-[11px] text-amber-600 dark:text-amber-400 block mt-1">Instituições distintas</span>
+                    </div>
+                </div>
+
+                <!-- Detalhamento por Hospital/Empresa -->
+                <div>
+                    <h4 class="font-bold text-gray-700 dark:text-gray-300 uppercase text-xs mb-2"><i class="fas fa-hospital mr-1 text-pokulai-brand"></i> Apuração Detalhada por Hospital / Empresa</h4>
+                    <div id="ai-breakdown-table" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"></div>
+                </div>
+
+                <!-- Aviso de Auditoria -->
+                <div class="p-3 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-400 flex items-start space-x-2">
+                    <i class="fas fa-info-circle text-pokulai-accent mt-0.5"></i>
+                    <span>O algoritmo de rastreamento isola apenas eventos com tipo <strong>Plantão</strong>. Compromissos como exames, consultas ou reuniões são automaticamente descartados do cômputo de horas e da certidão.</span>
+                </div>
+            </div>
+
+            <!-- Rodapé e Botões de Ação do Modal -->
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-between items-center">
+                <button onclick="closeShiftTrackerModal()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">Fechar</button>
+                <div class="flex space-x-2">
+                    <button onclick="generateStructuredShiftReportPDF()" class="bg-pokulai-brand text-white px-4 py-2 rounded text-xs font-bold hover:bg-teal-600 transition-colors shadow-md flex items-center">
+                        <i class="fas fa-file-signature mr-2"></i> Exportar Relatório Certificado (PDF)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFIGURAÇÃO SUPABASE & RLS/MFA -->
+    <div id="supabase-config-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 w-full max-w-lg rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
+                <h3 class="font-bold text-sm text-gray-800 dark:text-white"><i class="fas fa-database text-emerald-500 mr-2"></i> Configurações do Supabase & Segurança</h3>
+                <button onclick="closeConfigModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-5 space-y-4 text-xs">
+                <div>
+                    <label class="block font-bold text-gray-600 dark:text-gray-300 mb-1">SUPABASE URL</label>
+                    <input type="text" id="cfg-supabase-url" placeholder="https://xyzcompany.supabase.co" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-600 dark:text-gray-300 mb-1">SUPABASE ANON KEY (Pública / Segura com RLS)</label>
+                    <input type="password" id="cfg-supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white">
+                </div>
+                <div class="bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-800 dark:text-emerald-300">
+                    <p class="font-bold mb-1"><i class="fas fa-shield-alt mr-1"></i> Segurança Ativa:</p>
+                    <p>O Supabase opera sob <strong>Row Level Security (RLS)</strong>: a chave anônima apenas executa operações permitidas pelas regras SQL. Enquanto não preenchido, a aplicação utiliza persistência segura em <code>localStorage</code>.</p>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-end space-x-2">
+                <button onclick="closeConfigModal()" class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs">Cancelar</button>
+                <button onclick="saveSupabaseConfig()" class="bg-pokulai-brand text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-teal-600">Salvar Conexão</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: MFA (MULTI-FACTOR AUTHENTICATION) -->
+    <div id="mfa-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 w-full max-w-md rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
+            <div class="flex justify-between items-center border-b pb-3 border-gray-200 dark:border-gray-700">
+                <h3 class="font-bold text-sm text-gray-800 dark:text-white"><i class="fas fa-mobile-alt text-amber-500 mr-2"></i> Autenticação Multifator (MFA - TOTP)</h3>
+                <button onclick="closeMfaModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="text-xs space-y-3 text-gray-600 dark:text-gray-300">
+                <p>O Supabase suporta verificação em duas etapas via aplicativo autenticador (Google Authenticator, Authy, etc.).</p>
+                <div class="p-3 bg-gray-100 dark:bg-gray-700 rounded text-center">
+                    <p class="font-semibold text-gray-700 dark:text-gray-200 mb-1">Status MFA Atual:</p>
+                    <span id="mfa-status-text" class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">Nível 1 (Senha Padrão)</span>
+                </div>
+                <button onclick="enrollMfaTotp()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded text-xs shadow-sm transition-colors">
+                    Ativar Segundo Fator de Autenticação (TOTP)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // GERENCIAMENTO DE TEMA E INTERFACE
+        // =========================================================================
+        function toggleSidebar() { document.getElementById('main-sidebar').classList.toggle('collapsed'); }
+        function toggleTheme() {
+            const html = document.documentElement; const icon = document.getElementById('theme-icon');
+            if (html.classList.contains('dark')) { html.classList.remove('dark'); localStorage.setItem('pokulai_theme', 'light'); icon.className = 'fas fa-moon text-gray-500 text-xl'; }
+            else { html.classList.add('dark'); localStorage.setItem('pokulai_theme', 'dark'); icon.className = 'fas fa-sun text-yellow-400 text-xl'; }
+        }
+        function toggleFullScreen() {
+            const doc = window.document; const docEl = doc.documentElement; const icon = document.getElementById('fullscreen-icon');
+            const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+            const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+            if(!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) { requestFullScreen.call(docEl); icon.classList.remove('fa-expand'); icon.classList.add('fa-compress'); }
+            else { cancelFullScreen.call(doc); icon.classList.remove('fa-compress'); icon.classList.add('fa-expand'); }
+        }
+        function changeMonth(delta) {
+            viewingMonth += delta;
+            if(viewingMonth > 12) { viewingMonth = 1; viewingYear++; }
+            if(viewingMonth < 1) { viewingMonth = 12; viewingYear--; }
+            renderApp();
+        }
+
+        // =========================================================================
+        // CLIENTE SUPABASE & FALLBACK
+        // =========================================================================
+        let supabaseClient = null;
+        let supabaseConfig = JSON.parse(localStorage.getItem('pokulai_supabase_cfg')) || { url: '', key: '' };
+
+        function initSupabase() {
+            if (supabaseConfig.url && supabaseConfig.key && window.supabase) {
+                try {
+                    supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.key, {
+                        auth: { persistSession: true, autoRefreshToken: true }
+                    });
+                    document.getElementById('supabase-status-badge').innerText = 'Conectado ao Supabase';
+                    document.getElementById('supabase-status-badge').className = 'text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300';
+                    checkSupabaseSession();
+                } catch(e) {
+                    console.error("Erro ao inicializar Supabase:", e);
+                }
+            } else {
+                document.getElementById('supabase-status-badge').innerText = 'Modo Local (Teste)';
+                document.getElementById('supabase-status-badge').className = 'text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+            }
+        }
+
+        function openConfigModal() {
+            document.getElementById('cfg-supabase-url').value = supabaseConfig.url || '';
+            document.getElementById('cfg-supabase-key').value = supabaseConfig.key || '';
+            document.getElementById('supabase-config-modal').classList.remove('hidden');
+        }
+        function closeConfigModal() { document.getElementById('supabase-config-modal').classList.add('hidden'); }
+        function saveSupabaseConfig() {
+            supabaseConfig.url = document.getElementById('cfg-supabase-url').value.trim();
+            supabaseConfig.key = document.getElementById('cfg-supabase-key').value.trim();
+            localStorage.setItem('pokulai_supabase_cfg', JSON.stringify(supabaseConfig));
+            closeConfigModal();
+            initSupabase();
+            alert("Configurações do Supabase atualizadas.");
+        }
+
+        async function checkSupabaseSession() {
+            if(!supabaseClient) return;
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                const user = session.user;
+                const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', user.id).single();
+                authUser = {
+                    id: user.id,
+                    name: profile ? profile.name : user.email.split('@')[0],
+                    role: profile ? profile.role : 'doctor',
+                    roleLabel: (profile && profile.role === 'admin') ? 'Administrador Geral' : 'Médico Titular',
+                    crm: profile ? profile.crm : '12345/RS',
+                    profId: 1
+                };
+                currentViewProfId = authUser.role === 'admin' ? 0 : 1;
+                applyAuthState();
+            }
+        }
+
+        // =========================================================================
+        // DADOS GLOBAIS
+        // =========================================================================
+        let professionals = JSON.parse(localStorage.getItem('pokulai_profs_v14')) || [
+            { id: 1, name: 'Dr. Enrique Pokulat', spec: 'Médico Titular', crm: '43.210/RS' },
+            { id: 2, name: 'Dra. Maria Souza', spec: 'Plantão Secundário', crm: '38.990/RS' }
+        ];
+
+        const colorPalette = [
+            { bg: 'bg-blue-600', dot: 'blue' }, { bg: 'bg-teal-600', dot: 'teal' },
+            { bg: 'bg-purple-600', dot: 'purple' }, { bg: 'bg-orange-600', dot: 'orange' },
+            { bg: 'bg-pink-600', dot: 'pink' }, { bg: 'bg-indigo-600', dot: 'indigo' },
+            { bg: 'bg-red-600', dot: 'red' }, { bg: 'bg-green-600', dot: 'green' }
+        ];
+
+        let locations = JSON.parse(localStorage.getItem('pokulai_locations_v14')) || [
+            { id: 1, name: 'Hospital Comunitário Jaboticaba', locType: 'plantao', colorClass: 'bg-blue-600', dotColor: 'blue', expanded: true },
+            { id: 2, name: 'Hospital São Lucas - Chapada', locType: 'plantao', colorClass: 'bg-teal-600', dotColor: 'teal', expanded: true },
+            { id: 3, name: 'Hospital de Caridade Santa Maria', locType: 'exame', colorClass: 'bg-purple-600', dotColor: 'purple', expanded: true },
+            { id: 4, name: 'Hospital Regional Santo Ângelo', locType: 'plantao', colorClass: 'bg-orange-600', dotColor: 'orange', expanded: true },
+            { id: 5, name: 'Pronto Atendimento Municipal Planalto', locType: 'plantao', colorClass: 'bg-yellow-500 text-dark-override', dotColor: 'yellow', expanded: true },
+            { id: 6, name: 'Clínica Radiplan (Passo Fundo)', locType: 'exame', colorClass: 'bg-pink-600', dotColor: 'pink', expanded: true },
+            { id: 7, name: 'Hospital de Caridade Carazinho', locType: 'exame', colorClass: 'bg-indigo-600', dotColor: 'indigo', expanded: true }
+        ];
+
+        let events = JSON.parse(localStorage.getItem('pokulai_events_v14')) || [
+            { id: 101, profId: 1, locId: 1, date: 2, month: 10, year: 2026, text: '07:00 às 07:00 (24h)', type: 'plantao', hours: 24, examsCount: 0 },
+            { id: 102, profId: 1, locId: 1, date: 3, month: 10, year: 2026, text: '07:00 às 07:00 (24h)', type: 'plantao', hours: 24, examsCount: 0 },
+            { id: 103, profId: 1, locId: 1, date: 9, month: 10, year: 2026, text: '07:00 às 07:00 (24h)', type: 'plantao', hours: 24, examsCount: 0 },
+            { id: 104, profId: 1, locId: 1, date: 10, month: 10, year: 2026, text: '07:00 às 07:00 (24h)', type: 'plantao', hours: 24, examsCount: 0 },
+            { id: 201, profId: 1, locId: 2, date: 7, month: 10, year: 2026, text: 'das 17h às 24h', type: 'plantao', hours: 7, examsCount: 0 },
+            { id: 2011, profId: 1, locId: 2, date: 8, month: 10, year: 2026, text: 'das 00h às 07h', type: 'plantao', hours: 7, examsCount: 0 },
+            { id: 202, profId: 1, locId: 2, date: 14, month: 10, year: 2026, text: '17:30 às 07:00', type: 'plantao', hours: 13.5, examsCount: 0 },
+            { id: 203, profId: 1, locId: 2, date: 21, month: 10, year: 2026, text: '17:30 às 07:00', type: 'plantao', hours: 13.5, examsCount: 0 },
+            { id: 401, profId: 1, locId: 4, date: 5, month: 10, year: 2026, text: '08:00 às 20:00 (12h)', type: 'plantao', hours: 12, examsCount: 0 },
+            { id: 501, profId: 1, locId: 5, date: 19, month: 10, year: 2026, text: '08:00 às 15:00', type: 'plantao', hours: 7, examsCount: 0 },
+            // Eventos do tipo Exame (NÃO DEVEM ENTRAR NO RELATÓRIO DE PLANTÃO)
+            { id: 301, profId: 1, locId: 3, date: 15, month: 10, year: 2026, text: '13:00 às 18:00 / Pouso', type: 'exame', hours: 5, examsCount: 15 },
+            { id: 601, profId: 1, locId: 6, date: 6, month: 10, year: 2026, text: '08:00 às 17:00', type: 'exame', hours: 9, examsCount: 20 }
+        ];
+
+        let voiceLogs = JSON.parse(localStorage.getItem('pokulai_voice_logs_v14')) || [];
+        let currentViewProfId = 0;
+        let viewingMonth = 10;
+        let viewingYear = 2026;
+
+        function saveData() {
+            localStorage.setItem('pokulai_profs_v14', JSON.stringify(professionals));
+            localStorage.setItem('pokulai_locations_v14', JSON.stringify(locations));
+            localStorage.setItem('pokulai_events_v14', JSON.stringify(events));
+            localStorage.setItem('pokulai_voice_logs_v14', JSON.stringify(voiceLogs));
+        }
+
+        // =========================================================================
+        // MÓDULO INTELIGENTE DE RASTREAMENTO E APURAÇÃO DE PLANTÕES
+        // =========================================================================
+        let currentAuditData = null;
+
+        function openShiftTrackerModal() {
+            const profSelect = document.getElementById('ai-filter-prof');
+            profSelect.innerHTML = professionals.map(p => `<option value="${p.id}" ${p.id === (currentViewProfId || 1) ? 'selected' : ''}>${p.name}</option>`).join('');
+
+            const monthSelect = document.getElementById('ai-filter-month');
+            monthSelect.innerHTML = monthNames.map((m, idx) => `<option value="${idx + 1}" ${idx + 1 === viewingMonth ? 'selected' : ''}>${m}</option>`).join('');
+
+            document.getElementById('ai-filter-year').value = viewingYear;
+            document.getElementById('ai-shifts-modal').classList.remove('hidden');
+            runShiftAudit();
+        }
+
+        function closeShiftTrackerModal() {
+            document.getElementById('ai-shifts-modal').classList.add('hidden');
+        }
+
+        function runShiftAudit() {
+            const profId = parseInt(document.getElementById('ai-filter-prof').value);
+            const month = parseInt(document.getElementById('ai-filter-month').value);
+            const year = parseInt(document.getElementById('ai-filter-year').value);
+            const prof = professionals.find(p => p.id === profId) || professionals[0];
+
+            // RASTREAMENTO INTELIGENTE: APENAS TIPO 'plantao'
+            const shiftEvents = events.filter(e => {
+                return e.profId === profId &&
+                       e.month === month &&
+                       e.year === year &&
+                       e.type === 'plantao'; // REGRA DE OURO: Desconsidera exames e outros compromissos
+            });
+
+            shiftEvents.sort((a,b) => a.date - b.date);
+
+            // Agregação por Local/Hospital
+            const breakdown = {};
+            let grandTotalHours = 0;
+
+            shiftEvents.forEach(ev => {
+                const loc = locations.find(l => l.id === ev.locId) || { name: 'Hospital Geral' };
+                if (!breakdown[loc.name]) {
+                    breakdown[loc.name] = {
+                        locationName: loc.name,
+                        locType: loc.locType,
+                        totalHours: 0,
+                        shiftsCount: 0,
+                        entries: []
+                    };
+                }
+                const h = parseFloat(ev.hours) || 0;
+                breakdown[loc.name].totalHours += h;
+                breakdown[loc.name].shiftsCount += 1;
+                breakdown[loc.name].entries.push({
+                    date: `${String(ev.date).padStart(2,'0')}/${String(ev.month).padStart(2,'0')}/${ev.year}`,
+                    hours: h,
+                    text: ev.text
+                });
+                grandTotalHours += h;
+            });
+
+            currentAuditData = {
+                prof,
+                month,
+                year,
+                grandTotalHours,
+                totalShifts: shiftEvents.length,
+                totalLocations: Object.keys(breakdown).length,
+                breakdown,
+                shiftEvents
+            };
+
+            // Atualização de UI
+            document.getElementById('ai-total-hours').innerText = `${grandTotalHours}h`;
+            document.getElementById('ai-total-shifts').innerText = shiftEvents.length;
+            document.getElementById('ai-total-locations').innerText = Object.keys(breakdown).length;
+
+            const breakdownTable = document.getElementById('ai-breakdown-table');
+            if (Object.keys(breakdown).length === 0) {
+                breakdownTable.innerHTML = `<div class="p-6 text-center text-gray-400 italic">Nenhum plantão localizado para este profissional no período selecionado.</div>`;
+                return;
+            }
+
+            let tableHtml = `
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead class="bg-gray-100 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300 font-bold uppercase">
+                        <tr>
+                            <th class="p-3">Hospital / Estabelecimento</th>
+                            <th class="p-3 text-center">Nº Plantões</th>
+                            <th class="p-3 text-right">Carga Horária</th>
+                            <th class="p-3 text-center">Datas / Escalas</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            `;
+
+            for (const locName in breakdown) {
+                const item = breakdown[locName];
+                const datesSummary = item.entries.map(e => `${e.date.split('/')[0]} (${e.hours}h)`).join(', ');
+                tableHtml += `
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        <td class="p-3 font-semibold text-gray-800 dark:text-gray-200"><i class="far fa-hospital mr-2 text-teal-600"></i>${item.locationName}</td>
+                        <td class="p-3 text-center">${item.shiftsCount}</td>
+                        <td class="p-3 text-right font-bold text-teal-700 dark:text-teal-400">${item.totalHours}h</td>
+                        <td class="p-3 text-center text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-xs" title="${datesSummary}">Dias: ${datesSummary}</td>
+                    </tr>
+                `;
+            }
+
+            tableHtml += `</tbody></table>`;
+            breakdownTable.innerHTML = tableHtml;
+        }
+
+        // =========================================================================
+        // GERAÇÃO DE RELATÓRIO ESTRUTURADO CERTIFICADO EM PDF
+        // =========================================================================
+        function generateStructuredShiftReportPDF() {
+            if (!currentAuditData || currentAuditData.totalShifts === 0) {
+                alert("Nenhum plantão localizado para emissão do relatório.");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+            const city = document.getElementById('ai-report-city').value || 'Ibirubá - RS';
+            const issueDate = new Date().toLocaleDateString('pt-BR');
+
+            const primaryColor = [15, 118, 110]; // #0F766E Teal
+            const navyColor = [30, 58, 138];    // #1E3A8A Dark Blue
+
+            // 1. TÍTULO CENTRALIZADO
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(16);
+            doc.setTextColor(navyColor[0], navyColor[1], navyColor[2]);
+            doc.text("RELATÓRIO DE COMPROVAÇÃO E APURAÇÃO DE PLANTÕES MÉDICOS", 105, 20, { align: "center" });
+
+            doc.setFontSize(10);
+            doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+            doc.text("DOCUMENTO OFICIAL DE FECHAMENTO DE CARGA HORÁRIA E ESCALAS", 105, 26, { align: "center" });
+
+            doc.setDrawColor(200, 200, 200);
+            doc.setLineWidth(0.5);
+            doc.line(14, 30, 196, 30);
+
+            // 2. IDENTIFICAÇÃO E TEXTO JUSTIFICADO
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.setTextColor(40, 40, 40);
+            doc.text(`Profissional Realizante: ${currentAuditData.prof.name}`, 14, 38);
+            doc.setFont("helvetica", "normal");
+            doc.text(`CRM: ${currentAuditData.prof.crm || 'N/D'}  |  Especialidade / Função: ${currentAuditData.prof.spec}`, 14, 43);
+            doc.text(`Período de Apuração: ${monthNames[currentAuditData.month - 1]} de ${currentAuditData.year}`, 14, 48);
+
+            // Texto Justificado
+            const justificativa = `Certificamos para os devidos fins de direito e controle administrativo que o profissional médico acima nominado e qualificado realizou com zelo, pontualidade e dedicação as escalas e plantões médicos discriminados no presente demonstrativo, em estrita conformidade com as diretrizes assistenciais de cada unidade hospitalar e contratante. Os registros e cômputos horários foram apurados pelo sistema inteligente e conferidos pelas respectivas direções técnicas.`;
+
+            doc.setFontSize(9);
+            doc.setTextColor(60, 60, 60);
+            const splitJustificativa = doc.splitTextToSize(justificativa, 182);
+            doc.text(splitJustificativa, 14, 55, { align: "justify", maxWidth: 182 });
+
+            // 3. TABELA DE PLANTÕES (AutoTable)
+            const tableRows = [];
+            currentAuditData.shiftEvents.forEach(e => {
+                const loc = locations.find(l => l.id === e.locId) || { name: 'Hospital' };
+                tableRows.push([
+                    `${String(e.date).padStart(2,'0')}/${String(e.month).padStart(2,'0')}/${e.year}`,
+                    loc.name,
+                    e.text,
+                    `${parseFloat(e.hours).toFixed(1)} h`
+                ]);
+            });
+
+            doc.autoTable({
+                startY: 75,
+                head: [['Data', 'Local de Realização (Hospital / Unidade)', 'Horário / Escala', 'Horas Apuradas']],
+                body: tableRows,
+                foot: [['', '', 'CARGA HORÁRIA TOTAL DE PLANTÕES:', `${currentAuditData.grandTotalHours.toFixed(1)} h`]],
+                theme: 'grid',
+                headStyles: { fillColor: primaryColor, textColor: 255, fontStyle: 'bold', halign: 'left' },
+                footStyles: { fillColor: navyColor, textColor: 255, fontStyle: 'bold', halign: 'right' },
+                columnStyles: {
+                    0: { cellWidth: 26, halign: 'center' },
+                    1: { cellWidth: 86 },
+                    2: { cellWidth: 42, halign: 'center' },
+                    3: { cellWidth: 28, halign: 'right' }
+                },
+                styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.5 }
+            });
+
+            let finalY = doc.lastAutoTable.finalY + 15;
+
+            // Se estiver muito próximo do rodapé, cria uma nova página
+            if (finalY > 230) {
+                doc.addPage();
+                finalY = 30;
+            }
+
+            // 4. BLOCO DE ASSINATURAS DO PROFISSIONAL E DA EMPRESA
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9);
+            doc.setTextColor(50, 50, 50);
+
+            // Linha da Esquerda: Profissional
+            doc.line(20, finalY + 15, 90, finalY + 15);
+            doc.text(currentAuditData.prof.name, 55, finalY + 20, { align: "center" });
+            doc.setFontSize(8);
+            doc.text("Profissional Realizante", 55, finalY + 24, { align: "center" });
+
+            // Linha da Direita: Empresa / Hospital
+            doc.line(120, finalY + 15, 190, finalY + 15);
+            doc.setFontSize(9);
+            doc.text("Direção Médica / Administrativa", 155, finalY + 20, { align: "center" });
+            doc.setFontSize(8);
+            doc.text("Empresa / Unidade Hospitalar", 155, finalY + 24, { align: "center" });
+
+            // 5. RODAPÉ FIXO EM TODAS AS PÁGINAS
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setDrawColor(220, 220, 220);
+                doc.line(14, 282, 196, 282);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.setTextColor(120, 120, 120);
+                doc.text(`Profissional: ${currentAuditData.prof.name} | Data de Emissão: ${issueDate} | Local: ${city}`, 14, 287);
+                doc.text(`Página ${i} de ${pageCount}`, 196, 287, { align: "right" });
+            }
+
+            // Salva o PDF
+            const cleanProfName = currentAuditData.prof.name.replace(/\s+/g, '_');
+            doc.save(`Apuracao_Plantoes_${cleanProfName}_${currentAuditData.month}_${currentAuditData.year}.pdf`);
+        }
+
+        // =========================================================================
+        // AUTENTICAÇÃO E PERFIS
+        // =========================================================================
+        let authUser = JSON.parse(localStorage.getItem('pokulai_auth_user_visual')) || null;
+
+        async function handleLogin() {
+            const user = document.getElementById('login-user').value.trim() || 'Médico Padrão';
+            const pass = document.getElementById('login-pass').value.trim();
+
+            if (supabaseClient && user.includes('@')) {
+                // Autenticação Real Supabase
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email: user, password: pass });
+                if (error) {
+                    alert("Erro na autenticação Supabase: " + error.message);
+                    return;
+                }
+                await checkSupabaseSession();
+                return;
+            }
+
+            // Modo Simulação / Teste Local
+            const isAdmin = user.toLowerCase().includes('admin');
+            authUser = {
+                id: 'local-test-uuid',
+                name: isAdmin ? 'Admin' : user,
+                role: isAdmin ? 'admin' : 'doctor',
+                roleLabel: isAdmin ? 'Administrador Geral' : 'Médico',
+                crm: '54.321/RS',
+                profId: isAdmin ? null : 1
+            };
+            currentViewProfId = isAdmin ? 0 : 1;
+            localStorage.setItem('pokulai_auth_user_visual', JSON.stringify(authUser));
+            applyAuthState();
+        }
+
+        async function handleSignUp() {
+            const user = document.getElementById('login-user').value.trim();
+            const pass = document.getElementById('login-pass').value.trim();
+            if(!supabaseClient) {
+                alert("Para cadastrar usuários no banco de dados, insira a URL e a Anon Key do Supabase nas configurações.");
+                openConfigModal();
+                return;
+            }
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: user,
+                password: pass,
+                options: { data: { name: user.split('@')[0], role: 'doctor' } }
+            });
+            if (error) alert("Erro ao cadastrar: " + error.message);
+            else alert("Cadastro efetuado! Verifique seu e-mail ou faça login.");
+        }
+
+        async function handleLogout() {
+            if(supabaseClient) await supabaseClient.auth.signOut();
+            authUser = null;
+            localStorage.removeItem('pokulai_auth_user_visual');
+            currentViewProfId = 1;
+            applyAuthState();
+        }
+
+        function openMfaModal() { document.getElementById('mfa-modal').classList.remove('hidden'); }
+        function closeMfaModal() { document.getElementById('mfa-modal').classList.add('hidden'); }
+
+        async function enrollMfaTotp() {
+            if(!supabaseClient) {
+                alert("O MFA está disponível conectado ao Supabase. No ambiente de teste local, o fluxo está simulado.");
+                return;
+            }
+            try {
+                const { data, error } = await supabaseClient.auth.mfa.enroll({ factorType: 'totp' });
+                if(error) throw error;
+                prompt("Copie a chave secreta TOTP abaixo para seu aplicativo autenticador:", data.totp.secret);
+            } catch(e) {
+                alert("Aviso: " + e.message);
+            }
+        }
+
+        function applyAuthState() {
+            const loginContainer = document.getElementById('login-form-container');
+            const loggedInContainer = document.getElementById('logged-in-container');
+            const adminTeamModule = document.getElementById('admin-team-module');
+
+            if (authUser) {
+                loginContainer.classList.add('hidden');
+                loggedInContainer.classList.remove('hidden');
+                loggedInContainer.classList.add('flex');
+                document.getElementById('auth-user-name').innerText = authUser.name;
+                document.getElementById('auth-user-role').innerText = authUser.roleLabel;
+
+                if(authUser.role === 'admin') {
+                    adminTeamModule.classList.remove('hidden');
+                    adminTeamModule.classList.add('flex');
+                } else {
+                    adminTeamModule.classList.add('hidden');
+                    adminTeamModule.classList.remove('flex');
+                    currentViewProfId = authUser.profId || 1;
+                }
+            } else {
+                loginContainer.classList.remove('hidden');
+                loggedInContainer.classList.add('hidden');
+                loggedInContainer.classList.remove('flex');
+                adminTeamModule.classList.add('hidden');
+            }
+            renderApp();
+        }
+
+        // =========================================================================
+        // PROCESSAMENTO DE LINGUAGEM NATURAL (NLP)
+        // =========================================================================
+        function parseNaturalLanguage(text, source) {
+            if (currentViewProfId === 0 && !text.toLowerCase().includes('dr') && !text.toLowerCase().includes('para') && !text.toLowerCase().includes('com')) {
+                alert(`Para agendar na Visão Geral via ${source}, cite o nome do profissional (Ex: "...para Dr. Enrique").`);
+                return;
+            }
+
+            const txtLower = text.toLowerCase();
+            const dayMatch = txtLower.match(/dia (\d{1,2})/);
+            const dateVal = dayMatch ? parseInt(dayMatch[1]) : null;
+
+            let monthVal = viewingMonth;
+            let yearVal = viewingYear;
+            const months = { 'janeiro':1, 'fevereiro':2, 'março':3, 'abril':4, 'maio':5, 'junho':6, 'julho':7, 'agosto':8, 'setembro':9, 'outubro':10, 'novembro':11, 'dezembro':12 };
+            const monthMatch = txtLower.match(/(?:de |em )?(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)/);
+            if (monthMatch) {
+                monthVal = months[monthMatch[1]];
+                if (monthVal < viewingMonth) yearVal++;
+            }
+
+            let startHour = null, endHour = null, fallbackTimeText = "Plantão";
+            const durMatch = txtLower.match(/(?:início|inicio|começa|começando)(?: às| as| a)? *(\d{1,2})(?:h|:\d{2})?.*duração(?: de)? *(\d{1,2}) *(?:horas|h)/);
+            if (durMatch) {
+                startHour = parseInt(durMatch[1]);
+                let dur = parseInt(durMatch[2]);
+                endHour = (startHour + dur) % 24;
+            } else {
+                const timeMatch = txtLower.match(/(?:das|de|dàs) *(\d{1,2})(?:h|:\d{2}| horas?)? *(?:às|até|as|a) *(\d{1,2})(?:h|:\d{2}| horas?| da manhã| da noite)?/);
+                if (timeMatch) {
+                    startHour = parseInt(timeMatch[1]);
+                    endHour = parseInt(timeMatch[2]);
+                } else if (txtLower.includes('aviso')) {
+                    fallbackTimeText = "Aviso via " + source;
+                }
+            }
+
+            let locationName = null;
+            const localMatch = txtLower.match(/(?:em|no|na|para) ([a-záâãéêíóôõúçA-Z]+)/);
+            if (localMatch && localMatch[1] && localMatch[1].trim() !== 'dr' && localMatch[1].trim() !== 'dra') {
+                locationName = localMatch[1].trim().replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
+            }
+
+            let targetProfId = currentViewProfId !== 0 ? currentViewProfId : null;
+            const profMatch = txtLower.match(/(?:para|com|dr\.|dra\.|dr|dra) ([a-záâãéêíóôõúçA-Z\s]+?)(?= em| no| na| dia| das| de|$)/);
+            if (profMatch) {
+                const searchName = profMatch[1].trim().toLowerCase();
+                const foundProf = professionals.find(p => p.name.toLowerCase().includes(searchName));
+                if (foundProf) targetProfId = foundProf.id;
+            }
+
+            if (!targetProfId && currentViewProfId === 0) { logAction(text, "Profissional não identificado."); return; }
+
+            if (dateVal && locationName) {
+                let targetLoc = locations.find(l => l.name.toLowerCase() === locationName.toLowerCase());
+                if (!targetLoc) targetLoc = addNewLocation(locationName);
+
+                const defaultType = targetLoc.locType || 'plantao';
+                let eventsToCreate = [];
+
+                if (startHour !== null && endHour !== null) {
+                    if (startHour > endHour) {
+                        eventsToCreate.push({ dateOff: 0, text: `das ${String(startHour).padStart(2,'0')}h às 24h`, hours: 24 - startHour });
+                        eventsToCreate.push({ dateOff: 1, text: `das 00h às ${String(endHour).padStart(2,'0')}h`, hours: endHour });
+                    } else {
+                        eventsToCreate.push({ dateOff: 0, text: `das ${String(startHour).padStart(2,'0')}h às ${String(endHour).padStart(2,'0')}h`, hours: endHour - startHour });
+                    }
+                } else {
+                    eventsToCreate.push({ dateOff: 0, text: fallbackTimeText, hours: 0 });
+                }
+
+                eventsToCreate.forEach((evObj, index) => {
+                    let targetDate = new Date(yearVal, monthVal - 1, dateVal + evObj.dateOff);
+                    events.push({
+                        id: Date.now() + index, profId: targetProfId, locId: targetLoc.id,
+                        date: targetDate.getDate(), month: targetDate.getMonth() + 1, year: targetDate.getFullYear(),
+                        text: evObj.text, type: defaultType, hours: evObj.hours, examsCount: 0
+                    });
+                });
+
+                targetLoc.expanded = true; saveData(); logAction(text, `Salvo com sucesso: Dia ${dateVal}/${monthVal} em ${targetLoc.name}`);
+                viewingMonth = monthVal; viewingYear = yearVal; renderApp();
+            } else { logAction(text, `Faltou dia ou local.`); }
+        }
+
+        function logAction(transcript, resultStr) { voiceLogs.unshift({ time: new Date().toLocaleTimeString('pt-BR'), transcript, resultStr }); if(voiceLogs.length > 10) voiceLogs.pop(); saveData(); renderApp(); }
+        function handleTextCommandSubmit(e) { if (e.key === 'Enter') processTextInput(); }
+        function processTextInput() { const inputEl = document.getElementById('nlp-text-input'); const text = inputEl.value.trim(); if(text) { parseNaturalLanguage(text, "Texto"); inputEl.value = ''; } }
+
+        // =========================================================================
+        // RECONHECIMENTO DE VOZ (MICROFONE)
+        // =========================================================================
+        let recognitionInstance = null; let isListening = false; let recognitionTimeout = null;
+        let finalVoiceTranscript = '';
+
+        function toggleVoiceCommand() {
+            const btn = document.getElementById('fab-record'); const icon = btn.querySelector('i');
+            if (isListening) { if (recognitionInstance) recognitionInstance.stop(); return; }
+            if(!recognitionInstance) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) { alert("Navegador não suporta reconhecimento de voz."); return; }
+                recognitionInstance = new SpeechRecognition();
+                recognitionInstance.lang = 'pt-BR';
+                recognitionInstance.continuous = true;
+                recognitionInstance.interimResults = false;
+
+                recognitionInstance.onstart = function() {
+                    isListening = true;
+                    finalVoiceTranscript = '';
+                    btn.classList.replace('bg-pokulai-brand', 'bg-red-600');
+                    btn.classList.add('animate-pulse');
+                    icon.className = 'fas fa-wave-square text-2xl';
+                    recognitionTimeout = setTimeout(() => { if(isListening && recognitionInstance) recognitionInstance.stop(); }, 60000);
+                };
+                recognitionInstance.onresult = function(event) {
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) finalVoiceTranscript += event.results[i][0].transcript + ' ';
+                    }
+                };
+                recognitionInstance.onend = function() {
+                    isListening = false;
+                    clearTimeout(recognitionTimeout);
+                    btn.classList.replace('bg-red-600', 'bg-pokulai-brand');
+                    btn.classList.remove('animate-pulse');
+                    icon.className = 'fas fa-microphone text-xl';
+                    if(finalVoiceTranscript.trim().length > 0) parseNaturalLanguage(finalVoiceTranscript.trim(), "Voz");
+                };
+            }
+            recognitionInstance.start();
+        }
+
+        // =========================================================================
+        // EXPORTAÇÕES GERAIS (EXCEL, WORD, PDF PADRÃO)
+        // =========================================================================
+        function getTableDataForExport() {
+            const profEvents = currentViewProfId === 0 ? events.slice() : events.filter(e => e.profId === currentViewProfId);
+            profEvents.sort((a,b) => new Date(a.year, a.month-1, a.date) - new Date(b.year, b.month-1, b.date));
+            const rawData = [];
+            profEvents.forEach(e => {
+                const loc = locations.find(l => l.id === e.locId); const prof = professionals.find(p => p.id === e.profId);
+                const row = { Data: `${e.date.toString().padStart(2, '0')}/${e.month.toString().padStart(2, '0')}/${e.year}`, Local: loc ? loc.name : 'N/D', Tipo: e.type === 'exame' ? 'Exame' : 'Plantão', Horario: e.text, Horas: parseFloat(e.hours) || 0, Exames: parseInt(e.examsCount) || 0 };
+                if(currentViewProfId === 0) row.Profissional = prof ? prof.name : 'N/D';
+                rawData.push(row);
+            });
+            return rawData;
+        }
+
+        function getReportFileName(ext) {
+            const base = currentViewProfId === 0 ? 'Equipe' : professionals.find(p=>p.id===currentViewProfId).name.replace(/\s+/g, '_');
+            return `Relatorio_${base}_${viewingMonth}_${viewingYear}.${ext}`;
+        }
+
+        function exportToExcel() {
+            const data = getTableDataForExport(); if(data.length === 0) return alert("Não há dados para exportar.");
+            const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Agenda"); XLSX.writeFile(wb, getReportFileName('xlsx'));
+        }
+
+        function exportToWord() {
+            const data = getTableDataForExport(); if(data.length === 0) return alert("Não há dados para exportar.");
+            let html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório PokulAI</title></head><body><h1 style="color: #1E3A8A; font-family: sans-serif;">Pokul<span style="color: #0F766E">AI.com</span></h1><h2>Relatório de Plantões e Exames - ${viewingMonth}/${viewingYear}</h2><table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%; font-family: sans-serif;"><tr style="background-color: #0F766E; color: white;"><th>Data</th>${currentViewProfId===0?'<th>Profissional</th>':''}<th>Local</th><th>Tipo</th><th>Horário</th><th>Horas</th><th>Exames</th></tr>`;
+            data.forEach(r => { html += `<tr><td>${r.Data}</td>${currentViewProfId===0?`<td>${r.Profissional}</td>`:''}<td>${r.Local}</td><td>${r.Tipo}</td><td>${r.Horario}</td><td>${r.Horas}</td><td>${r.Exames}</td></tr>`; });
+            html += `</table></body></html>`;
+            const blob = new Blob(['﻿', html], { type: 'application/msword' });
+            const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = getReportFileName('doc');
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf; const doc = new jsPDF();
+            const data = getTableDataForExport();
+            const tealColor = [15, 118, 110]; const blueColor = [30, 58, 138];
+            doc.setFont("helvetica", "bold"); doc.setFontSize(22);
+            doc.setTextColor(blueColor[0], blueColor[1], blueColor[2]); doc.text("Pokul", 14, 20);
+            doc.setTextColor(tealColor[0], tealColor[1], tealColor[2]); doc.text("AI.com", 14 + doc.getTextWidth("Pokul"), 20);
+            doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text(currentViewProfId === 0 ? "Visão Geral da Equipe" : "Relatório de Plantões e Exames", 195, 20, { align: "right" });
+            doc.setDrawColor(200, 200, 200); doc.line(14, 25, 195, 25);
+            doc.setFontSize(12); doc.setTextColor(30, 30, 30);
+            if (currentViewProfId === 0) { doc.text(`Relatório Consolidado de Toda a Equipe`, 14, 35); }
+            else { const prof = professionals.find(p => p.id === currentViewProfId); doc.text(`Profissional: ${prof.name}`, 14, 35); doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.text(`Especialidade / Função: ${prof.spec}`, 14, 40); }
+            const introText = `Este documento certifica a escala prevista para ${viewingMonth}/${viewingYear}. Informações geradas via PokulAI.`;
+            doc.text(doc.splitTextToSize(introText, 180), 14, 50, { align: "justify", maxWidth: 180 });
+            let totalH = 0; let totalE = 0;
+            const tableRows = data.map(r => { totalH += r.Horas; totalE += r.Exames; return currentViewProfId === 0 ? [r.Data, r.Profissional, r.Local, r.Tipo, r.Horario, r.Horas+'h', r.Exames] : [r.Data, r.Local, r.Tipo, r.Horario, r.Horas+'h', r.Exames]; });
+            let head = currentViewProfId === 0 ? ['Data', 'Profissional', 'Local', 'Tipo', 'Horário', 'Horas', 'Exames'] : ['Data', 'Local', 'Tipo', 'Horário', 'Horas', 'Exames'];
+            let foot = currentViewProfId === 0 ? ['', '', '', '', 'TOTAIS:', totalH+'h', totalE] : ['', '', '', 'TOTAIS:', totalH+'h', totalE];
+            doc.autoTable({ startY: 65, head: [head], body: tableRows, foot: [foot], headStyles: { fillColor: tealColor, textColor: 255, fontStyle: 'bold' }, footStyles: { fillColor: blueColor, textColor: 255, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [245, 248, 250] }, styles: { font: 'helvetica', fontSize: 9, cellPadding: 4 }, theme: 'grid' });
+            doc.save(getReportFileName('pdf'));
+        }
+
+        // =========================================================================
+        // GESTÃO DE ENTIDADES (PROFISSIONAIS, LOCAIS, EVENTOS)
+        // =========================================================================
+        function selectProfessional(profId) { currentViewProfId = profId; renderApp(); }
+        function addNewProfessional() { const name = prompt("Nome do novo profissional:"); if(name) { professionals.push({ id: Date.now(), name: name, spec: 'Novo Profissional', crm: '00000/RS' }); saveData(); renderApp(); } }
+        function toggleLocation(locId) { const loc = locations.find(l => l.id === locId); if (loc) { loc.expanded = !loc.expanded; saveData(); renderApp(); } }
+        function addNewLocation(name = "Novo Local") { const randomColor = colorPalette[Math.floor(Math.random() * colorPalette.length)]; const newLoc = { id: Date.now(), name: name, locType: 'plantao', colorClass: randomColor.bg, dotColor: randomColor.dot, expanded: true }; locations.push(newLoc); saveData(); renderApp(); return newLoc; }
+        function updateLocationName(locId, newName) { const loc = locations.find(l => l.id === locId); if (loc) { loc.name = newName; saveData(); renderApp(); } }
+        function updateLocationType(locId, type) { const loc = locations.find(l => l.id === locId); if (loc) { loc.locType = type; events.forEach(e => { if (e.locId === locId) e.type = type; }); saveData(); renderApp(); } }
+        function deleteLocation(locId) { if(confirm("Excluir este local?")) { locations = locations.filter(l => l.id !== locId); events = events.filter(e => e.locId !== locId); saveData(); renderApp(); } }
+        function addNewEvent(locId, date = 1, text = "Novo Horário") {
+            if (currentViewProfId === 0) { alert("Selecione um profissional específico."); return; }
+            const loc = locations.find(l => l.id === locId);
+            events.push({ id: Date.now(), profId: currentViewProfId, locId: locId, date: parseInt(date) || 1, month: viewingMonth, year: viewingYear, text: text, type: loc ? loc.locType : 'plantao', hours: 0, examsCount: 0 });
+            if(loc) loc.expanded = true; saveData(); renderApp();
+        }
+        function updateEventField(eventId, field, value) { const ev = events.find(e => e.id === eventId); if (ev) { if(field === 'date' || field === 'examsCount') ev[field] = parseInt(value) || 0; else if(field === 'hours') ev[field] = parseFloat(value) || 0; else ev[field] = value; saveData(); renderApp(); } }
+        function deleteEvent(eventId) { events = events.filter(e => e.id !== eventId); saveData(); renderApp(); }
+
+        const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+        // =========================================================================
+        // RENDERIZAÇÃO PRINCIPAL DO CALENDÁRIO
+        // =========================================================================
+        function renderApp() {
+            document.getElementById('current-month-display').innerText = `${monthNames[viewingMonth-1]} ${viewingYear}`;
+            if(authUser && authUser.role === 'admin') {
+                const profList = document.getElementById('admin-prof-list');
+                let profListHtml = `
+                    <div onclick="selectProfessional(0)" class="cursor-pointer flex items-center p-2 rounded transition-colors ${currentViewProfId === 0 ? 'prof-selected' : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'} mb-1">
+                        <div class="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-teal-600 dark:text-teal-400 text-xs font-bold mr-3"><i class="fas fa-globe"></i></div>
+                        <div class="flex-1 min-w-0"><p class="text-sm font-bold truncate">Visão Geral</p><p class="text-[10px] opacity-70 truncate">Toda a equipe</p></div>
+                        ${currentViewProfId === 0 ? '<i class="fas fa-check text-pokulai-brand dark:text-pokulai-accent text-sm"></i>' : ''}
+                    </div>`;
+                profListHtml += professionals.map(p => `
+                    <div onclick="selectProfessional(${p.id})" class="cursor-pointer flex items-center p-2 rounded transition-colors ${p.id === currentViewProfId ? 'prof-selected' : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'}">
+                        <div class="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-xs font-bold mr-3"><i class="fas fa-user"></i></div>
+                        <div class="flex-1 min-w-0"><p class="text-sm font-bold truncate">${p.name}</p><p class="text-[10px] opacity-70 truncate">${p.spec}</p></div>
+                        ${p.id === currentViewProfId ? '<i class="fas fa-check text-pokulai-brand dark:text-pokulai-accent text-sm"></i>' : ''}
+                    </div>`).join('');
+                profList.innerHTML = profListHtml;
+            }
+
+            const badgeEl = document.getElementById('current-view-badge'); const nameEl = document.getElementById('current-view-name');
+            if (currentViewProfId === 0) { nameEl.innerText = "Visão Geral (Equipe)"; badgeEl.classList.remove('hidden'); badgeEl.classList.add('flex'); }
+            else { const cp = professionals.find(p => p.id === currentViewProfId); if(cp) { nameEl.innerText = cp.name; badgeEl.classList.remove('hidden'); badgeEl.classList.add('flex'); } }
+
+            const currentEvents = events.filter(e => e.month === viewingMonth && e.year === viewingYear && (currentViewProfId === 0 ? true : e.profId === currentViewProfId));
+
+            const legendContainer = document.getElementById('legend-container'); legendContainer.innerHTML = '';
+            locations.forEach((loc) => {
+                const locEvents = currentEvents.filter(e => e.locId === loc.id).sort((a,b) => a.date - b.date);
+                if(currentViewProfId === 0 && locEvents.length === 0) return;
+                let eventsHtml = locEvents.map(e => {
+                    const prof = professionals.find(p => p.id === e.profId);
+                    const profLabel = currentViewProfId === 0 ? `<div class="text-[9px] font-bold text-pokulai-brand dark:text-pokulai-accent mb-0.5"><i class="fas fa-user-md mr-1"></i>${prof ? prof.name.split(' ')[0] + ' ' + (prof.name.split(' ')[1]||'') : ''}</div>` : '';
+                    return `
+                        <li class="flex flex-col bg-gray-50 dark:bg-gray-700/50 p-2 rounded mb-2 group border-l-2 border-${loc.dotColor}-500">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1">${profLabel}<span class="font-bold text-gray-700 dark:text-gray-300">Dia <span class="editable-sidebar" contenteditable="true" onblur="updateEventField(${e.id}, 'date', this.innerText)">${e.date}</span>:</span><span class="text-gray-600 dark:text-gray-400 block mt-1 editable-sidebar" contenteditable="true" onblur="updateEventField(${e.id}, 'text', this.innerText)">${e.text}</span></div>
+                                <button onclick="deleteEvent(${e.id})" class="text-red-400 hover:text-red-600 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash text-xs"></i></button>
+                            </div>
+                            <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 flex space-x-2 text-[10px]">
+                                <select onchange="updateEventField(${e.id}, 'type', this.value)" class="bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded p-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-pokulai-brand"><option value="plantao" ${e.type === 'plantao' ? 'selected' : ''}>Plantão</option><option value="exame" ${e.type === 'exame' ? 'selected' : ''}>Exame</option></select>
+                                <div class="flex items-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-1"><span class="text-gray-400 font-bold px-1"><i class="far fa-clock"></i></span><input type="number" step="0.5" onblur="updateEventField(${e.id}, 'hours', this.value)" value="${e.hours || 0}" class="w-8 bg-transparent text-center focus:outline-none text-gray-700 dark:text-gray-300"></div>
+                                <div class="flex items-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-1"><span class="text-gray-400 font-bold px-1"><i class="fas fa-file-medical"></i></span><input type="number" onblur="updateEventField(${e.id}, 'examsCount', this.value)" value="${e.examsCount || 0}" class="w-8 bg-transparent text-center focus:outline-none text-gray-700 dark:text-gray-300"></div>
+                            </div>
+                        </li>`;
+                }).join('');
+                const isExpanded = loc.expanded !== false; const bodyClass = isExpanded ? '' : 'hidden'; const chevronIcon = isExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
+                legendContainer.innerHTML += `
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm bg-white dark:bg-gray-800 overflow-hidden text-gray-800 dark:text-gray-200">
+                        <div class="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-700 select-none">
+                            <div class="flex items-center flex-1 cursor-pointer" onclick="toggleLocation(${loc.id})"><span class="w-3 h-3 rounded-full bg-${loc.dotColor}-500 mr-2 block"></span></div>
+                            <span class="font-semibold editable-sidebar flex-1 mr-2" contenteditable="true" onblur="updateLocationName(${loc.id}, this.innerText)">${loc.name}</span>
+                            <select onchange="updateLocationType(${loc.id}, this.value)" class="text-[9px] uppercase font-bold bg-transparent border-b border-dashed border-gray-400 text-gray-500 dark:text-gray-400 focus:outline-none mr-2 cursor-pointer"><option value="plantao" ${loc.locType !== 'exame' ? 'selected' : ''}>Plantão</option><option value="exame" ${loc.locType === 'exame' ? 'selected' : ''}>Exames</option></select>
+                            <div class="flex items-center">
+                                <span class="text-[10px] bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded mr-2">${locEvents.length}</span>
+                                <button onclick="toggleLocation(${loc.id})" class="text-gray-500 dark:text-gray-400 hover:text-pokulai-brand mr-2 p-1"><i class="fas ${chevronIcon}"></i></button>
+                                <button onclick="deleteLocation(${loc.id})" class="text-gray-400 hover:text-red-500 p-1"><i class="fas fa-times"></i></button>
+                            </div>
+                        </div>
+                        <div class="p-2 border-t border-gray-200 dark:border-gray-700 text-sm ${bodyClass}">
+                            <ul class="mb-2">${eventsHtml}</ul>
+                            ${currentViewProfId !== 0 ? `<button onclick="addNewEvent(${loc.id})" class="text-xs text-pokulai-brand dark:text-pokulai-accent font-semibold hover:underline w-full text-left p-1"><i class="fas fa-plus"></i> Novo Horário</button>` : ''}
+                        </div>
+                    </div>`;
+            });
+
+            const voiceContainer = document.getElementById('voice-log-container');
+            if(voiceLogs.length === 0) voiceContainer.innerHTML = '<p class="text-gray-400 italic">Nenhum comando utilizado.</p>';
+            else voiceContainer.innerHTML = voiceLogs.map(log => `<div class="bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700"><p class="text-gray-800 dark:text-gray-200 font-medium text-xs">"${log.transcript}"</p><p class="text-gray-500 dark:text-gray-400 text-xs mt-1"><i class="fas fa-check-circle text-green-500 mr-1"></i>${log.resultStr}</p></div>`).join('');
+
+            const calendarBody = document.getElementById('calendar-body'); calendarBody.innerHTML = '';
+            const firstDay = new Date(viewingYear, viewingMonth - 1, 1).getDay();
+            const daysInMonth = new Date(viewingYear, viewingMonth, 0).getDate();
+
+            for (let i = 0; i < firstDay; i++) calendarBody.innerHTML += `<div class="calendar-day bg-gray-100 dark:bg-gray-900 opacity-40 border-b border-r border-gray-200 dark:border-gray-700"></div>`;
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayEvents = currentEvents.filter(e => e.date === day);
+                const uniqueProfs = new Set(dayEvents.map(e => e.profId)).size;
+                const isCrowded = uniqueProfs >= 2;
+
+                let eventsHtml = dayEvents.map(e => {
+                    const loc = locations.find(l => l.id === e.locId);
+                    if(!loc) return '';
+                    const typeBadge = e.type === 'exame' ? '<i class="fas fa-stethoscope mr-1"></i>' : '<i class="far fa-clock mr-1"></i>';
+                    let profNameHtml = '';
+                    const prof = professionals.find(p => p.id === e.profId);
+                    if (prof) {
+                        const shortName = prof.name.split(' ')[0] + ' ' + (prof.name.split(' ')[1]||'');
+                        profNameHtml = `<span class="font-bold text-xs block text-white truncate pr-3" title="${prof.name}"><i class="fas fa-user-md mr-1"></i>${shortName}</span>`;
+                    }
+                    const toggleId = `cal-ev-${e.id}`;
+                    const toggleAction = isCrowded ? `onclick="document.getElementById('${toggleId}').classList.toggle('hidden'); event.stopPropagation();"` : '';
+                    const chevronHtml = isCrowded ? `<i class="fas fa-chevron-down text-[8px] absolute right-1.5 top-1.5 opacity-80"></i>` : '';
+                    const bodyClass = isCrowded ? 'hidden' : '';
+                    const pointerClass = isCrowded ? 'cursor-pointer hover:opacity-90' : '';
+
+                    return `
+                    <div class="${loc.colorClass} text-white px-1.5 py-1.5 rounded mb-1 shadow-sm leading-tight relative overflow-hidden ${pointerClass}" ${toggleAction}>
+                        ${chevronHtml}
+                        ${profNameHtml}
+                        <span class="font-normal text-[8px] block opacity-90 mt-0.5 tracking-wide truncate" title="${loc.name}">${typeBadge}${loc.name}</span>
+                        <div id="${toggleId}" class="${bodyClass}"><span class="block text-[10px] mt-1 font-medium bg-black/10 px-1 py-0.5 rounded truncate">${e.text}</span></div>
+                    </div>`;
+                }).join('');
+
+                const isToday = new Date().getDate() === day && new Date().getMonth() + 1 === viewingMonth && new Date().getFullYear() === viewingYear;
+                const conflictStyle = isToday ? 'border-2 border-blue-400 bg-blue-50 dark:bg-blue-900/10' : 'border-b border-r border-gray-200 dark:border-gray-700';
+                calendarBody.innerHTML += `<div class="calendar-day flex flex-col ${conflictStyle}"><div class="text-right text-gray-500 dark:text-gray-400 font-bold mb-1">${day}</div><div class="flex-1 space-y-1">${eventsHtml}</div></div>`;
+            }
+
+            const totalCells = firstDay + daysInMonth;
+            const remainingCells = (7 - (totalCells % 7)) % 7;
+            for (let i = 0; i < remainingCells; i++) calendarBody.innerHTML += `<div class="calendar-day bg-gray-100 dark:bg-gray-900 opacity-40 border-b border-r border-gray-200 dark:border-gray-700"></div>`;
+        }
+
+        // Inicialização
+        initSupabase();
+        applyAuthState();
+    </script>
+</body>
+</html>
