@@ -46,8 +46,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <!-- Supabase JS Client v2 (versão fixada) -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+    <!-- Supabase JS Client v2 (versão fixada; suporta chaves sb_publishable_) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"></script>
 
     <style>
         .calendar-grid {
@@ -119,6 +119,7 @@
                     <button id="btn-login" onclick="handleLogin()" class="flex-1 bg-pokulai-brand text-white p-2 rounded text-xs font-bold hover:bg-teal-600 transition-colors shadow-sm">Entrar</button>
                     <button onclick="handleSignUp()" class="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 p-2 rounded text-xs font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cadastrar</button>
                 </div>
+                <button id="btn-forgot" onclick="handleForgotPassword()" class="hidden w-full text-[10px] text-pokulai-brand dark:text-pokulai-accent hover:underline mb-1">Esqueci minha senha</button>
                 <p id="login-hint" class="text-[10px] text-gray-500 text-center">Modo local (sem segurança real): digite 'admin' ou o nome do profissional e clique em Entrar.</p>
             </div>
 
@@ -136,6 +137,10 @@
                         <p id="auth-user-name" class="text-sm font-bold text-gray-800 dark:text-white truncate">Nome</p>
                         <p id="auth-user-role" class="text-[10px] text-gray-500 dark:text-gray-400 truncate">Cargo</p>
                     </div>
+                </div>
+                <div id="cloud-status-row" class="hidden mt-2 flex items-center justify-between text-[10px]">
+                    <span id="cloud-org-name" class="text-gray-500 dark:text-gray-400 truncate"></span>
+                    <button id="cloud-sync-status" onclick="manualSync()" class="px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 whitespace-nowrap" title="Sincronizar agora">—</button>
                 </div>
             </div>
 
@@ -337,6 +342,11 @@
                 </div>
                 <div><label class="field-label">Tipo padrão dos lançamentos</label><select id="loc-type" class="field"></select></div>
                 <div class="grid grid-cols-2 gap-3">
+                    <div><label class="field-label">Carga padrão do plantão (horas)</label><input id="loc-shift-hours" type="number" min="0" max="48" step="0.5" class="field" placeholder="Ex.: 24"></div>
+                    <div><label class="field-label">Início padrão</label><input id="loc-shift-start" type="time" class="field"></div>
+                </div>
+                <p class="text-[10px] text-gray-500 -mt-1">Com carga e início padrão, basta falar "plantão dia 5 em Jaboticaba" que o horário é preenchido. Se disser só o início ("a partir das 19"), usa a carga padrão.</p>
+                <div class="grid grid-cols-2 gap-3">
                     <div><label class="field-label">Valor por hora de plantão (R$)</label><input id="loc-hourly" type="number" min="0" step="0.01" class="field" placeholder="0,00"></div>
                     <div><label class="field-label">Valor por exame (R$)</label><input id="loc-exam" type="number" min="0" step="0.01" class="field" placeholder="0,00"></div>
                 </div>
@@ -393,13 +403,14 @@
                     <input type="text" id="cfg-supabase-url" placeholder="https://xyzcompany.supabase.co" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white">
                 </div>
                 <div>
-                    <label class="block font-bold text-gray-600 dark:text-gray-300 mb-1">SUPABASE ANON KEY (Pública / Segura com RLS)</label>
+                    <label class="block font-bold text-gray-600 dark:text-gray-300 mb-1">CHAVE PUBLISHABLE / ANON (pública, protegida por RLS)</label>
                     <input type="password" id="cfg-supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white">
                 </div>
                 <div class="bg-amber-50 dark:bg-amber-950/30 p-3 rounded border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
                     <p class="font-bold"><i class="fas fa-shield-alt mr-1"></i> Importante sobre segurança:</p>
-                    <p>O Supabase é usado <strong>apenas para login</strong>. A agenda (plantões, locais, profissionais) continua salva somente <strong>neste navegador</strong> (<code>localStorage</code>), sem criptografia e sem sincronização entre aparelhos.</p>
-                    <p>Nunca cole aqui a chave <code>service_role</code>. Use somente a chave <code>anon</code> e mantenha RLS ativo na tabela <code>profiles</code> (o usuário não pode alterar o próprio campo <code>role</code>).</p>
+                    <p>Com o Supabase configurado, a agenda é <strong>salva na nuvem</strong> e sincronizada entre celular e computador (e com a equipe, quando houver gestor). O aparelho mantém uma cópia para funcionar sem internet e envia as alterações quando a conexão volta.</p>
+                    <p>Antes do primeiro uso, execute no <em>SQL Editor</em> do projeto o arquivo <code>supabase/migrations/20261025000000_agenda_schema.sql</code> (cria as tabelas <code>agenda_*</code> com segurança RLS).</p>
+                    <p>Use somente a chave <strong>publishable</strong> (<code>sb_publishable_...</code>) ou <code>anon</code>. Nunca cole a chave <code>service_role</code>/<code>sb_secret_</code>.</p>
                     <p>Deixe os dois campos em branco para voltar ao modo local.</p>
                 </div>
             </div>
@@ -498,9 +509,10 @@
         }
         function storeRemove(key) { try { localStorage.removeItem(key); } catch (e) { /* ignora */ } }
 
-        // IDs numéricos únicos e crescentes (Date.now() puro colide em operações no mesmo milissegundo)
+        // IDs numéricos únicos e crescentes. Date.now() × 1000 + sufixo aleatório evita colisão entre
+        // aparelhos que sincronizam a mesma agenda (continua abaixo de 2^53, seguro em JS e no bigint do banco)
         let lastId = 0;
-        function newId() { lastId = Math.max(Date.now(), lastId + 1); return lastId; }
+        function newId() { lastId = Math.max(Date.now() * 1000 + Math.floor(Math.random() * 1000), lastId + 1); return lastId; }
 
         async function fetchJSON(url, timeoutMs = 8000) {
             const ctrl = new AbortController();
@@ -594,7 +606,7 @@
         ];
         // Coordenadas aproximadas do centro de cada município (podem ser ajustadas no cadastro do local)
         const DEFAULT_LOCATIONS = [
-            { id: 1, name: 'Hospital Comunitário Jaboticaba', city: 'Jaboticaba - RS', lat: -27.6347, lng: -53.2789, locType: 'plantao', colorClass: 'bg-blue-600', dotColor: 'blue', expanded: true },
+            { id: 1, name: 'Hospital Comunitário Jaboticaba', city: 'Jaboticaba - RS', lat: -27.6347, lng: -53.2789, shiftHours: 24, shiftStart: 420, locType: 'plantao', colorClass: 'bg-blue-600', dotColor: 'blue', expanded: true },
             { id: 2, name: 'Hospital São Lucas - Chapada', city: 'Chapada - RS', lat: -28.0567, lng: -53.0667, locType: 'plantao', colorClass: 'bg-teal-600', dotColor: 'teal', expanded: true },
             { id: 3, name: 'Hospital de Caridade Santa Maria', city: 'Santa Maria - RS', lat: -29.6842, lng: -53.8069, locType: 'exame', colorClass: 'bg-purple-600', dotColor: 'purple', expanded: true },
             { id: 4, name: 'Hospital Regional Santo Ângelo', city: 'Santo Ângelo - RS', lat: -28.2994, lng: -54.2633, locType: 'plantao', colorClass: 'bg-orange-600', dotColor: 'orange', expanded: true },
@@ -634,12 +646,15 @@
                     id: Number(l.id), name: String(l.name).trim(), city: String(l.city || '').trim(),
                     lat: parseNum(l.lat), lng: parseNum(l.lng),
                     locType: normType(l.locType), colorClass: color.bg, dotColor: color.dot, expanded: l.expanded !== false,
-                    hourlyRate: Math.max(0, parseNum(l.hourlyRate) || 0), examRate: Math.max(0, parseNum(l.examRate) || 0)
+                    hourlyRate: Math.max(0, parseNum(l.hourlyRate) || 0), examRate: Math.max(0, parseNum(l.examRate) || 0),
+                    shiftHours: Math.min(48, Math.max(0, parseNum(l.shiftHours) || 0)),
+                    shiftStart: (() => { const v = parseNum(l.shiftStart); return v !== null && v >= 0 && v < 1440 ? Math.round(v) : null; })()
                 };
                 // Migração: locais de exemplo antigos ganham cidade/coordenadas
                 const def = DEFAULT_LOCATIONS.find(d => d.id === loc.id && d.name === loc.name);
                 if (def && !loc.city) loc.city = def.city;
                 if (def && !validCoord(loc.lat, loc.lng)) { loc.lat = def.lat; loc.lng = def.lng; }
+                if (def && def.shiftHours && !loc.shiftHours && l.shiftHours === undefined) { loc.shiftHours = def.shiftHours; loc.shiftStart = def.shiftStart; }
                 if (!validCoord(loc.lat, loc.lng)) { loc.lat = null; loc.lng = null; }
                 return loc;
             });
@@ -688,17 +703,26 @@
         let viewingMonth = today0.getMonth() + 1;
         let viewingYear = today0.getFullYear();
 
-        function saveData() {
+        function saveLocal() {
             storeJSON('pokulai_profs_v14', professionals);
             storeJSON('pokulai_locations_v14', locations);
             storeJSON('pokulai_events_v14', events);
             storeJSON('pokulai_voice_logs_v14', voiceLogs);
             storeJSON('pokulai_settings_v1', settings);
         }
+        // Salva no aparelho e, se conectado, agenda o envio das alterações para a nuvem
+        function saveData() {
+            saveLocal();
+            if (typeof cloudActive === 'function' && cloudActive()) scheduleSync();
+        }
 
         // Sincroniza alterações feitas em outra aba (evita uma aba sobrescrever a outra)
         window.addEventListener('storage', (e) => {
-            if (e.key && /^pokulai_.*_v(14|1)$/.test(e.key)) { loadAllData(); renderApp(); }
+            if (e.key && /^pokulai_.*_v(14|1)$/.test(e.key)) {
+                loadAllData();
+                if (e.key === 'pokulai_sync_snap_v1') syncSnap = loadJSON('pokulai_sync_snap_v1', null);
+                renderApp();
+            }
         });
 
         // =========================================================================
@@ -876,9 +900,13 @@
         // CLIENTE SUPABASE & FALLBACK
         // =========================================================================
         let supabaseClient = null;
-        let supabaseConfig = Object.assign({ url: '', key: '' }, loadJSON('pokulai_supabase_cfg', {}));
+        // Projeto padrão da agenda (URL e chave publishable são públicas por natureza; a proteção é o RLS).
+        // Quem salvar outra configuração (ou campos vazios = modo local) no ícone de engrenagem sobrepõe este padrão.
+        const DEFAULT_SUPABASE_CONFIG = { url: '', key: '' };
+        let supabaseConfig = Object.assign({}, DEFAULT_SUPABASE_CONFIG, loadJSON('pokulai_supabase_cfg', {}));
         let authUser = null;
         let pendingFactorId = null;
+        let authListener = null;
 
         function setBadge(text, tone) {
             const badge = document.getElementById('supabase-status-badge');
@@ -892,11 +920,14 @@
         }
 
         function initSupabase() {
+            if (authListener) { try { authListener.unsubscribe(); } catch (e) { /* ignora */ } authListener = null; }
+            stopRealtime();
             supabaseClient = null;
             const hint = document.getElementById('login-hint');
+            document.getElementById('btn-forgot').classList.add('hidden');
             if (!supabaseConfig.url || !supabaseConfig.key) {
                 setBadge('Modo Local (Teste)', 'local');
-                hint.innerText = "Modo local (sem segurança real): digite 'admin' ou o nome do profissional e clique em Entrar.";
+                hint.innerText = "Modo local (sem segurança real e sem nuvem): digite 'admin' ou o nome do profissional e clique em Entrar.";
                 return;
             }
             if (!window.supabase || !window.supabase.createClient) {
@@ -906,10 +937,19 @@
             }
             try {
                 supabaseClient = window.supabase.createClient(supabaseConfig.url, supabaseConfig.key, {
-                    auth: { persistSession: true, autoRefreshToken: true, storageKey: 'pokulai_sb_auth' }
+                    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'pokulai_sb_auth' }
                 });
-                setBadge('Supabase configurado', 'ok');
-                hint.innerText = 'Entre com seu e-mail e senha cadastrados.';
+                setBadge('Nuvem (Supabase)', 'ok');
+                hint.innerText = 'Entre com seu e-mail e senha. Primeiro acesso? Digite e-mail e senha e toque em Cadastrar.';
+                document.getElementById('btn-forgot').classList.remove('hidden');
+                const { data } = supabaseClient.auth.onAuthStateChange((event) => {
+                    // Executa fora do callback (recomendação do supabase-js para evitar travas)
+                    setTimeout(() => {
+                        if (event === 'PASSWORD_RECOVERY') handlePasswordRecovery();
+                        else if (event === 'SIGNED_OUT' && authUser && authUser.source === 'supabase') { finishCloudSession(false); authUser = null; applyAuthState(); }
+                    }, 0);
+                });
+                authListener = data && data.subscription;
                 checkSupabaseSession();
             } catch (e) {
                 console.error('Erro ao inicializar Supabase:', e);
@@ -930,8 +970,13 @@
             const key = document.getElementById('cfg-supabase-key').value.trim();
             if ((url && !key) || (!url && key)) return alert('Preencha a URL e a chave, ou deixe ambos em branco para o modo local.');
             if (url && !/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(url)) return alert('URL inválida. Exemplo: https://xyzcompany.supabase.co');
-            if (key && /service_role/.test(atobSafe(key.split('.')[1] || ''))) return alert('Esta é uma chave service_role (secreta). Nunca a use no navegador. Cole a chave "anon".');
-            if (supabaseClient) { try { await supabaseClient.auth.signOut(); } catch (e) { /* ignora */ } }
+            if (key && (/^sb_secret_/i.test(key) || /service_role/.test(atobSafe(key.split('.')[1] || '')))) return alert('Esta é uma chave SECRETA (service_role / sb_secret). Nunca a use no navegador. Cole a chave publishable ou anon.');
+            if (url === supabaseConfig.url && key === supabaseConfig.key) return closeConfigModal();
+            if (authUser && authUser.source === 'supabase') {
+                if (!(await confirmPendingBeforeLeaving())) return;
+                try { await supabaseClient.auth.signOut(); } catch (e) { /* ignora */ }
+                finishCloudSession(true);
+            }
             authUser = null; storeRemove('pokulai_auth_user_visual');
             supabaseConfig = { url, key };
             storeJSON('pokulai_supabase_cfg', supabaseConfig);
@@ -961,7 +1006,7 @@
             return false;
         }
 
-        // Vincula o usuário autenticado a um profissional da agenda (por e-mail, depois por nome; senão cria)
+        // Vincula o usuário a um profissional da agenda local (por e-mail, depois por nome; senão cria)
         function linkProfessional({ name, email, crm }) {
             let p = email ? professionals.find(x => x.email && norm(x.email) === norm(email)) : null;
             if (!p) p = professionals.find(x => norm(x.name) === norm(name));
@@ -970,26 +1015,390 @@
             return p;
         }
 
+        let sessionCheckRunning = false;
         async function checkSupabaseSession() {
-            if (!supabaseClient) return;
+            if (!supabaseClient || sessionCheckRunning) return;
+            sessionCheckRunning = true;
             try {
                 const { data: { session }, error } = await supabaseClient.auth.getSession();
                 if (error) throw error;
-                if (!session) { if (authUser && authUser.source === 'supabase') { authUser = null; applyAuthState(); } return; }
+                if (!session) { if (authUser && authUser.source === 'supabase') { finishCloudSession(false); authUser = null; applyAuthState(); } return; }
                 if (!(await ensureMfaLevel())) { await supabaseClient.auth.signOut(); alert('Login cancelado: verificação em duas etapas não concluída.'); return; }
                 const user = session.user;
-                const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', user.id).maybeSingle();
-                const email = user.email || '';
-                const name = (profile && profile.name) || (email ? email.split('@')[0] : 'Usuário');
-                const role = profile && profile.role === 'admin' ? 'admin' : 'doctor';
-                const prof = role === 'admin' ? null : linkProfessional({ name, email, crm: profile && profile.crm });
-                authUser = { id: user.id, name, email, role, roleLabel: role === 'admin' ? 'Administrador Geral' : 'Médico Titular', profId: prof ? prof.id : null, source: 'supabase' };
-                currentViewProfId = role === 'admin' ? 0 : prof.id;
+                const displayName = (user.user_metadata && user.user_metadata.name) || (user.email ? user.email.split('@')[0] : 'Usuário');
+                const mem = await connectCloud(user, displayName);
+                if (!mem) { await supabaseClient.auth.signOut(); finishCloudSession(false); authUser = null; applyAuthState(); return; }
+                const prof = professionals.find(p => p.id === cloud.profId);
+                authUser = {
+                    id: user.id, name: prof ? prof.name : displayName, email: user.email || '', role: cloud.role === 'admin' ? 'admin' : 'doctor',
+                    roleLabel: cloud.role === 'admin' ? 'Gestor(a) da agenda' : 'Médico(a)', profId: cloud.profId, source: 'supabase'
+                };
+                // Gestor que também atende abre na própria agenda (troca para "Visão Geral" na lista da equipe)
+                currentViewProfId = cloud.profId != null && professionals.some(p => p.id === cloud.profId) ? cloud.profId : 0;
                 applyAuthState();
             } catch (e) {
                 console.error(e);
-                alert('Falha ao validar a sessão no Supabase: ' + e.message);
+                alert('Falha ao conectar à nuvem: ' + (e.message || e));
+            } finally { sessionCheckRunning = false; }
+        }
+
+        // =========================================================================
+        // SINCRONIZAÇÃO COM A NUVEM (local primeiro: funciona offline e envia depois)
+        // =========================================================================
+        const CLOUD_TABLES = { professionals: 'agenda_professionals', locations: 'agenda_locations', events: 'agenda_events' };
+        let cloud = loadJSON('pokulai_cloud_v1', null);        // { orgId, orgName, role, profId, userId }
+        let syncSnap = loadJSON('pokulai_sync_snap_v1', null); // último estado conhecido do servidor
+        let syncTimer = null, syncing = false, syncAgain = false, realtimeChannel = null, settingsTimer = null;
+
+        function cloudActive() { return !!(supabaseClient && cloud && cloud.orgId && authUser && authUser.source === 'supabase'); }
+        function emptySnap(orgId) { return { orgId, professionals: {}, locations: {}, events: {} }; }
+
+        const toDb = {
+            professionals: p => ({ id: p.id, name: p.name.slice(0, 120), spec: (p.spec || '').slice(0, 120), crm: (p.crm || '').slice(0, 40), email: (p.email || '').slice(0, 200) }),
+            locations: l => ({
+                id: l.id, name: l.name.slice(0, 120), city: (l.city || '').slice(0, 120), lat: validCoord(l.lat, l.lng) ? l.lat : null, lng: validCoord(l.lat, l.lng) ? l.lng : null,
+                loc_type: l.locType, hourly_rate: Math.round((l.hourlyRate || 0) * 100) / 100, exam_rate: Math.round((l.examRate || 0) * 100) / 100,
+                shift_hours: Math.round((l.shiftHours || 0) * 100) / 100, shift_start: l.shiftStart ?? null, color_class: l.colorClass, dot_color: l.dotColor
+            }),
+            events: e => ({
+                id: e.id, prof_id: e.profId, loc_id: e.locId, day: `${e.year}-${pad2(e.month)}-${pad2(e.date)}`, text: String(e.text || '').slice(0, 300), type: e.type,
+                hours: Math.round((e.hours || 0) * 100) / 100, exams_count: e.examsCount || 0, group_id: e.groupId ?? null,
+                start_min: Number.isFinite(e.startMin) ? e.startMin : null, end_min: Number.isFinite(e.endMin) ? e.endMin : null
+            })
+        };
+        const fromDb = {
+            professionals: r => ({ id: Number(r.id), name: r.name, spec: r.spec, crm: r.crm, email: r.email }),
+            locations: r => ({ id: Number(r.id), name: r.name, city: r.city, lat: r.lat, lng: r.lng, locType: r.loc_type, hourlyRate: Number(r.hourly_rate), examRate: Number(r.exam_rate), shiftHours: Number(r.shift_hours), shiftStart: r.shift_start, colorClass: r.color_class, dotColor: r.dot_color }),
+            events: r => {
+                const [y, m, d] = String(r.day).split('-').map(Number);
+                const ev = { id: Number(r.id), profId: Number(r.prof_id), locId: Number(r.loc_id), date: d, month: m, year: y, text: r.text, type: r.type, hours: Number(r.hours), examsCount: r.exams_count };
+                if (r.group_id != null) ev.groupId = Number(r.group_id);
+                if (r.start_min != null && r.end_min != null) { ev.startMin = r.start_min; ev.endMin = r.end_min; }
+                return ev;
             }
+        };
+        const sanitizers = { professionals: sanitizeProfessionals, locations: sanitizeLocations, events: sanitizeEvents };
+        function getList(t) { return t === 'professionals' ? professionals : t === 'locations' ? locations : events; }
+        function setList(t, list) { if (t === 'professionals') professionals = list; else if (t === 'locations') locations = list; else events = list; }
+        function rowJson(t, obj) { return JSON.stringify(toDb[t](obj)); }
+        function storeSnap() { storeJSON('pokulai_sync_snap_v1', syncSnap); }
+
+        function setSyncStatus(state, detail) {
+            const el = document.getElementById('cloud-sync-status');
+            if (!el) return;
+            const map = {
+                ok: ['✓ Sincronizado', 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'],
+                syncing: ['⟳ Sincronizando…', 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300'],
+                pending: ['● Alterações pendentes', 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'],
+                offline: ['Sem internet · salvo no aparelho', 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'],
+                error: ['⚠ Erro ao sincronizar', 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300']
+            };
+            const [text, cls] = map[state] || map.ok;
+            el.innerText = text;
+            el.title = detail || 'Sincronizar agora';
+            el.className = 'px-1.5 py-0.5 rounded whitespace-nowrap ' + cls;
+        }
+
+        function computeDiff() {
+            const diff = {};
+            Object.keys(CLOUD_TABLES).forEach(t => {
+                const cur = new Map(getList(t).map(x => [String(x.id), rowJson(t, x)]));
+                const snap = (syncSnap && syncSnap[t]) || {};
+                diff[t] = {
+                    upserts: [...cur].filter(([id, j]) => snap[id] !== j).map(([, j]) => JSON.parse(j)),
+                    deletes: Object.keys(snap).filter(id => !cur.has(id)).map(Number)
+                };
+            });
+            return diff;
+        }
+        function diffSize(d) { return Object.values(d).reduce((s, x) => s + x.upserts.length + x.deletes.length, 0); }
+
+        function scheduleSync(delay = 800) {
+            if (!cloudActive()) return;
+            setSyncStatus('pending');
+            clearTimeout(syncTimer);
+            syncTimer = setTimeout(pushChanges, delay);
+        }
+        function isPermissionError(e) { return e && (e.code === '42501' || /row-level security|permission denied/i.test(e.message || '')); }
+
+        async function pushChanges() {
+            if (!cloudActive()) return;
+            if (syncing) { syncAgain = true; return; }
+            syncing = true;
+            const org = cloud.orgId;
+            try {
+                if (!syncSnap || syncSnap.orgId !== org) syncSnap = emptySnap(org);
+                const diff = computeDiff();
+                if (!diffSize(diff)) { setSyncStatus('ok'); return; }
+                setSyncStatus('syncing');
+                // Ordem respeita as chaves estrangeiras: profissionais -> locais -> lançamentos; exclusões no sentido inverso
+                for (const t of ['professionals', 'locations', 'events']) {
+                    const rows = diff[t].upserts;
+                    for (let i = 0; i < rows.length; i += 500) {
+                        const chunk = rows.slice(i, i + 500);
+                        const { error } = await supabaseClient.from(CLOUD_TABLES[t]).upsert(chunk.map(r => ({ ...r, org_id: org })), { onConflict: 'org_id,id' });
+                        if (error) throw error;
+                        chunk.forEach(r => { syncSnap[t][String(r.id)] = JSON.stringify(r); });
+                        storeSnap();
+                    }
+                }
+                for (const t of ['events', 'locations', 'professionals']) {
+                    const ids = diff[t].deletes;
+                    for (let i = 0; i < ids.length; i += 200) {
+                        const chunk = ids.slice(i, i + 200);
+                        const { error } = await supabaseClient.from(CLOUD_TABLES[t]).delete().eq('org_id', org).in('id', chunk);
+                        if (error) throw error;
+                        chunk.forEach(id => { delete syncSnap[t][String(id)]; });
+                        storeSnap();
+                    }
+                }
+                setSyncStatus('ok');
+            } catch (e) {
+                console.error('Falha ao sincronizar:', e);
+                if (isPermissionError(e)) {
+                    setSyncStatus('error', e.message);
+                    showToast('Uma alteração não foi aceita pela nuvem (sem permissão). Recarregando os dados da nuvem.', 'error');
+                    try { await pullAll(); } catch (e2) { console.error(e2); }
+                } else if (typeof navigator !== 'undefined' && navigator.onLine === false) setSyncStatus('offline');
+                else { setSyncStatus('error', e.message); clearTimeout(syncTimer); syncTimer = setTimeout(pushChanges, 30000); }
+            } finally {
+                syncing = false;
+                if (syncAgain) { syncAgain = false; scheduleSync(200); }
+            }
+        }
+
+        async function fetchAll(table, org) {
+            const out = [];
+            for (let from = 0; ; from += 1000) {
+                const { data, error } = await supabaseClient.from(table).select('*').eq('org_id', org).order('id').range(from, from + 999);
+                if (error) throw error;
+                out.push(...data);
+                if (data.length < 1000) break;
+            }
+            return out;
+        }
+
+        // Baixa tudo o que o usuário pode ver na organização e substitui a cópia local
+        async function pullAll() {
+            if (!supabaseClient || !cloud) return;
+            const org = cloud.orgId;
+            setSyncStatus('syncing');
+            const [p, l, e] = await Promise.all([fetchAll('agenda_professionals', org), fetchAll('agenda_locations', org), fetchAll('agenda_events', org)]);
+            const expanded = new Map(locations.map(x => [x.id, x.expanded]));
+            professionals = sanitizeProfessionals(p.map(fromDb.professionals));
+            locations = sanitizeLocations(l.map(fromDb.locations)).map(x => ({ ...x, expanded: expanded.has(x.id) ? expanded.get(x.id) : true }));
+            events = sanitizeEvents(e.map(fromDb.events));
+            syncSnap = emptySnap(org);
+            Object.keys(CLOUD_TABLES).forEach(t => getList(t).forEach(x => { syncSnap[t][String(x.id)] = rowJson(t, x); }));
+            storeSnap();
+            saveLocal();
+            renderApp();
+            setSyncStatus('ok');
+        }
+
+        // Alterações feitas em outro aparelho / por outro membro chegam em tempo real
+        function applyRemote(t, payload) {
+            const list = getList(t).slice();
+            if (payload.eventType === 'DELETE') {
+                const id = Number(payload.old && payload.old.id);
+                if (!Number.isFinite(id)) return;
+                setList(t, list.filter(x => x.id !== id));
+                if (syncSnap && syncSnap[t]) delete syncSnap[t][String(id)];
+                if (t === 'professionals') events = events.filter(ev => ev.profId !== id);
+                if (t === 'locations') events = events.filter(ev => ev.locId !== id);
+            } else {
+                const obj = sanitizers[t]([fromDb[t](payload.new)])[0];
+                if (!obj) return;
+                const idx = list.findIndex(x => x.id === obj.id);
+                if (t === 'locations') obj.expanded = idx >= 0 ? list[idx].expanded : true;
+                if (idx >= 0) list[idx] = obj; else list.push(obj);
+                setList(t, list);
+                if (syncSnap && syncSnap[t]) syncSnap[t][String(obj.id)] = rowJson(t, obj);
+            }
+            storeSnap(); saveLocal(); renderApp();
+        }
+
+        function stopRealtime() {
+            if (realtimeChannel && supabaseClient) { try { supabaseClient.removeChannel(realtimeChannel); } catch (e) { /* ignora */ } }
+            realtimeChannel = null;
+        }
+        function startRealtime() {
+            stopRealtime();
+            if (!cloudActive() || typeof supabaseClient.channel !== 'function') return;
+            const org = cloud.orgId;
+            let ch = supabaseClient.channel('agenda-' + org);
+            Object.entries(CLOUD_TABLES).forEach(([t, table]) => {
+                ch = ch.on('postgres_changes', { event: '*', schema: 'public', table, filter: `org_id=eq.${org}` }, payload => {
+                    // Ignora o eco das próprias alterações ainda não confirmadas
+                    if (syncing) return;
+                    applyRemote(t, payload);
+                });
+            });
+            ch = ch.on('postgres_changes', { event: '*', schema: 'public', table: 'agenda_members', filter: `org_id=eq.${org}` }, () => { if (!syncing) checkSupabaseSession(); });
+            realtimeChannel = ch.subscribe();
+        }
+
+        async function syncSettingsDown() {
+            try {
+                const { data, error } = await supabaseClient.from('agenda_user_settings').select('data').eq('user_id', cloud.userId).maybeSingle();
+                if (error) throw error;
+                if (data && data.data && Object.keys(data.data).length) { settings = sanitizeSettings(data.data); saveLocal(); }
+                else await pushSettings();
+            } catch (e) { console.warn('Preferências não sincronizadas:', e); }
+        }
+        async function pushSettings() {
+            if (!cloudActive()) return;
+            try {
+                const { error } = await supabaseClient.from('agenda_user_settings').upsert({ user_id: cloud.userId, data: settings }, { onConflict: 'user_id' });
+                if (error) throw error;
+            } catch (e) { console.warn('Preferências não enviadas:', e); }
+        }
+        function scheduleSettingsSync() { if (!cloudActive()) return; clearTimeout(settingsTimer); settingsTimer = setTimeout(pushSettings, 1000); }
+
+        function isMissingSchema(e) { return e && (e.code === '42P01' || e.code === 'PGRST205' || e.code === 'PGRST202' || /does not exist|could not find the (table|function)/i.test(e.message || '')); }
+
+        // Conecta o usuário à sua organização (agenda pessoal ou de equipe), criando-a no primeiro acesso
+        async function connectCloud(user, displayName) {
+            try { await supabaseClient.rpc('agenda_accept_invites'); } catch (e) { /* convites são opcionais */ }
+            const { data: mems, error } = await supabaseClient.from('agenda_members').select('org_id, role, prof_id, agenda_orgs(name)').eq('user_id', user.id);
+            if (error) {
+                if (isMissingSchema(error)) throw new Error('o banco ainda não foi preparado. Execute o arquivo supabase/migrations/20261025000000_agenda_schema.sql no SQL Editor do projeto.');
+                throw error;
+            }
+            let mem = (mems || []).find(m => cloud && m.org_id === cloud.orgId && cloud.userId === user.id) || (mems || [])[0];
+            let created = false;
+            if (!mem) {
+                const name = prompt('Bem-vindo(a)! Vamos criar sua agenda na nuvem.\n\nNome da agenda (ex.: "Agenda Dr. Enrique" ou "Equipe Radiplan"):', `Agenda de ${displayName}`);
+                if (name === null) return null;
+                const { data: orgId, error: cErr } = await supabaseClient.rpc('agenda_create_org', { p_name: name.trim() || `Agenda de ${displayName}` });
+                if (cErr) throw cErr;
+                mem = { org_id: orgId, role: 'admin', prof_id: null, agenda_orgs: { name } };
+                created = true;
+            }
+            const sameAccount = cloud && cloud.userId === user.id && cloud.orgId === mem.org_id;
+            const hadPendingLocal = sameAccount && syncSnap && syncSnap.orgId === mem.org_id;
+            cloud = { orgId: mem.org_id, orgName: (mem.agenda_orgs && mem.agenda_orgs.name) || 'Agenda', role: mem.role, profId: mem.prof_id != null ? Number(mem.prof_id) : null, userId: user.id };
+            storeJSON('pokulai_cloud_v1', cloud);
+            // authUser provisório para permitir a sincronização durante a conexão
+            authUser = { id: user.id, name: displayName, email: user.email || '', role: mem.role === 'admin' ? 'admin' : 'doctor', roleLabel: '', profId: cloud.profId, source: 'supabase' };
+
+            if (created) await initialUpload(user, displayName);
+            else {
+                if (hadPendingLocal) await pushChanges();   // envia o que foi feito offline antes de baixar
+                else if (!sameAccount) wipeLocalAgenda();   // aparelho usado por outra conta: não mistura dados
+                await pullAll();
+            }
+
+            if (cloud.profId == null) await ensureOwnProfessional(user, displayName);
+            await syncSettingsDown();
+            startRealtime();
+            return mem;
+        }
+
+        // Primeiro acesso: oferece enviar os dados que já estão neste aparelho
+        async function initialUpload(user, displayName) {
+            syncSnap = emptySnap(cloud.orgId);
+            const n = events.length;
+            const keepAll = n === 0 || confirm(`Enviar para a nuvem os dados que já estão neste aparelho?\n\n${n} lançamento(s), ${locations.length} local(is) e ${professionals.length} profissional(is).\n\nOK = enviar tudo\nCancelar = começar a agenda vazia (mantém só os locais cadastrados)`);
+            if (!keepAll) { events = []; professionals = []; }
+            await ensureOwnProfessional(user, displayName);
+            await pushChanges();
+        }
+
+        async function ensureOwnProfessional(user, displayName) {
+            if (cloud.role === 'admin') {
+                let p = professionals.find(x => x.email && user.email && norm(x.email) === norm(user.email));
+                if (!p) {
+                    const options = professionals.map((x, i) => `${i + 1} - ${x.name}`).join('\n');
+                    const pick = professionals.length ? prompt(`Qual destes profissionais é você?\n\n${options}\n\nDigite o número, ou deixe em branco se você for apenas gestor(a) e não atender:`, '1') : null;
+                    const idx = parseInt(pick, 10) - 1;
+                    if (pick !== null && professionals[idx]) p = professionals[idx];
+                    else if (!professionals.length) {
+                        const name = prompt('Seu nome como profissional (aparece nos relatórios). Deixe em branco se for apenas gestor(a):', displayName);
+                        if (name && name.trim()) { p = { id: newId(), name: name.trim(), spec: 'Médico', crm: '', email: user.email || '' }; professionals.push(p); }
+                    }
+                }
+                if (!p) return;
+                if (user.email && !p.email) p.email = user.email;
+                saveLocal();
+                await pushChanges();
+                const { error } = await supabaseClient.from('agenda_members').update({ prof_id: p.id }).eq('org_id', cloud.orgId).eq('user_id', user.id);
+                if (error) throw error;
+                cloud.profId = p.id;
+            } else {
+                const name = prompt('Seu nome como profissional (aparece nos relatórios):', displayName);
+                if (name === null) return;
+                const crm = prompt('Seu CRM (opcional):', '') || '';
+                const id = newId();
+                const { error } = await supabaseClient.rpc('agenda_claim_professional', { p_org: cloud.orgId, p_id: id, p_name: name.trim() || displayName, p_crm: crm.trim() });
+                if (error) throw error;
+                cloud.profId = id;
+                await pullAll();
+            }
+            storeJSON('pokulai_cloud_v1', cloud);
+        }
+
+        function wipeLocalAgenda() {
+            professionals = []; locations = []; events = []; voiceLogs = [];
+            syncSnap = null; storeRemove('pokulai_sync_snap_v1');
+            saveLocal();
+        }
+
+        // Ao sair: envia pendências e remove a agenda deste aparelho (privacidade em celular compartilhado)
+        async function confirmPendingBeforeLeaving() {
+            if (!cloudActive()) return true;
+            try { await pushChanges(); } catch (e) { /* tratado abaixo */ }
+            const pending = diffSize(computeDiff());
+            return !pending || confirm(`Há ${pending} alteração(ões) que ainda não chegaram à nuvem (sem internet?). Se sair agora, elas serão perdidas.\n\nSair mesmo assim?`);
+        }
+        function finishCloudSession(wipe) {
+            stopRealtime();
+            clearTimeout(syncTimer); clearTimeout(settingsTimer);
+            cloud = null; storeRemove('pokulai_cloud_v1');
+            if (wipe) wipeLocalAgenda();
+        }
+
+        async function manualSync() {
+            if (!cloudActive()) return;
+            await pushChanges();
+            try { await pullAll(); } catch (e) { setSyncStatus(navigator.onLine === false ? 'offline' : 'error', e.message); }
+        }
+        window.addEventListener('online', () => { if (cloudActive()) scheduleSync(100); });
+        window.addEventListener('offline', () => { if (cloudActive()) setSyncStatus('offline'); });
+        document.addEventListener('visibilitychange', () => {
+            // Ao voltar para o app, envia pendências e busca novidades (caso o tempo real tenha caído)
+            if (document.visibilityState === 'visible' && cloudActive()) manualSync();
+        });
+
+        // ---- Convites (gestor convida médicos por e-mail) ----
+        async function inviteProfessional(profId) {
+            if (!cloudActive() || cloud.role !== 'admin') return alert('Convites exigem login na nuvem como gestor(a).');
+            const p = professionals.find(x => x.id === profId); if (!p) return;
+            await pushChanges(); // garante que o profissional já existe na nuvem
+            const email = (prompt(`E-mail de ${p.name} para o convite:`, p.email || '') || '').trim().toLowerCase();
+            if (!email) return;
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('E-mail inválido.');
+            const asAdmin = confirm(`${p.name} também será gestor(a) (verá e editará a agenda de toda a equipe)?\n\nOK = gestor(a)\nCancelar = médico(a): vê e lança só a própria agenda`);
+            const { error } = await supabaseClient.from('agenda_invites').upsert({ org_id: cloud.orgId, email, role: asAdmin ? 'admin' : 'member', prof_id: p.id }, { onConflict: 'org_id,email' });
+            if (error) return alert('Não foi possível criar o convite: ' + error.message);
+            if (!p.email) { p.email = email; saveData(); }
+            alert(`Convite criado para ${email}.\n\nPeça para abrir a agenda, tocar em "Cadastrar" com esse e-mail, confirmar o e-mail recebido e entrar. A agenda "${cloud.orgName}" aparecerá automaticamente.`);
+        }
+
+        // ---- Senha ----
+        async function handleForgotPassword() {
+            if (!supabaseClient) return;
+            const email = (document.getElementById('login-user').value.trim() || prompt('Seu e-mail:') || '').trim();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Digite seu e-mail no campo acima.');
+            const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: location.href.split('#')[0] });
+            alert(error ? 'Erro: ' + error.message : 'Se o e-mail estiver cadastrado, você receberá um link para criar uma nova senha.');
+        }
+        async function handlePasswordRecovery() {
+            const pass = prompt('Digite a nova senha (mínimo 8 caracteres):');
+            if (!pass) return;
+            if (pass.length < 8) return alert('A senha deve ter pelo menos 8 caracteres.');
+            const { error } = await supabaseClient.auth.updateUser({ password: pass });
+            alert(error ? 'Erro ao trocar a senha: ' + error.message : 'Senha alterada com sucesso!');
         }
 
         // =========================================================================
@@ -1140,7 +1549,7 @@
         function reportCityValue() {
             const el = document.getElementById('ai-report-city');
             const v = (el && el.value.trim()) || settings.reportCity || settings.baseName || '';
-            if (el && v !== settings.reportCity) { settings.reportCity = v; saveData(); }
+            if (el && v !== settings.reportCity) { settings.reportCity = v; saveData(); scheduleSettingsSync(); }
             return v;
         }
 
@@ -1463,14 +1872,21 @@
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user)) return alert('Informe um e-mail válido.');
             if (pass.length < 8) return alert('A senha deve ter pelo menos 8 caracteres.');
             try {
-                // O papel (role) NÃO é enviado pelo cliente: deve ser definido no servidor (trigger/RLS)
-                const { error } = await supabaseClient.auth.signUp({ email: user, password: pass, options: { data: { name: user.split('@')[0] } } });
+                const name = prompt('Seu nome (como aparecerá na agenda):', '');
+                if (name === null) return;
+                // O papel (gestor/médico) NÃO é enviado pelo cliente: é definido no servidor (agenda_members)
+                const { data, error } = await supabaseClient.auth.signUp({ email: user, password: pass, options: { data: { name: name.trim() || user.split('@')[0] }, emailRedirectTo: location.href.split('#')[0] } });
                 if (error) alert("Erro ao cadastrar: " + error.message);
-                else alert("Cadastro efetuado! Verifique seu e-mail para confirmar a conta e depois faça login.");
+                else if (data && data.session) { document.getElementById('login-pass').value = ''; await checkSupabaseSession(); }
+                else alert("Cadastro efetuado! Abra o e-mail de confirmação que enviamos e depois entre com seu e-mail e senha.");
             } catch (e) { alert('Falha de conexão com o Supabase: ' + e.message); }
         }
 
         async function handleLogout() {
+            if (authUser && authUser.source === 'supabase') {
+                if (!(await confirmPendingBeforeLeaving())) return;
+                finishCloudSession(true);
+            }
             if (supabaseClient) { try { await supabaseClient.auth.signOut(); } catch (e) { console.warn(e); } }
             authUser = null;
             storeRemove('pokulai_auth_user_visual');
@@ -1553,6 +1969,10 @@
                 loggedInContainer.classList.add('flex');
                 document.getElementById('auth-user-name').innerText = authUser.name;
                 document.getElementById('auth-user-role').innerText = authUser.roleLabel;
+                const inCloud = authUser.source === 'supabase' && cloud;
+                document.getElementById('cloud-status-row').classList.toggle('hidden', !inCloud);
+                document.getElementById('cloud-status-row').classList.toggle('flex', !!inCloud);
+                if (inCloud) document.getElementById('cloud-org-name').innerText = '☁ ' + cloud.orgName;
 
                 if (authUser.role === 'admin') {
                     adminTeamModule.classList.remove('hidden');
@@ -1560,7 +1980,7 @@
                 } else {
                     adminTeamModule.classList.add('hidden');
                     adminTeamModule.classList.remove('flex');
-                    if (!professionals.some(p => p.id === authUser.profId)) {
+                    if (!professionals.some(p => p.id === authUser.profId) && authUser.source === 'local') {
                         authUser.profId = linkProfessional({ name: authUser.name, email: authUser.email }).id;
                         if (authUser.source === 'local') storeJSON('pokulai_auth_user_visual', authUser);
                     }
@@ -1568,6 +1988,7 @@
                 }
             } else {
                 loginContainer.classList.remove('hidden');
+                document.getElementById('cloud-status-row').classList.add('hidden');
                 loggedInContainer.classList.add('hidden');
                 loggedInContainer.classList.remove('flex');
                 adminTeamModule.classList.add('hidden');
@@ -1641,6 +2062,11 @@
                 if (s !== null && d > 0 && d <= 48 * 60) return { startMin: s % 1440, durationMin: d };
             }
             return null;
+        }
+        // Só o início ("às 19h", "a partir das 7"), sem fim: retorna minutos ou null
+        function parseStartOnly(t) {
+            const m = t.match(new RegExp(String.raw`(?:^|\s)(?:a partir das?|a partir de|as|das|inicio as|inicia as|comeca as|comecando as|entrada as|entrando as|chegando as)\s+` + TIME_TOKEN + String.raw`(?!\s*(?:exames?|ultrassons?|laudos?|\d|\/))`));
+            return m ? toMinutes(m[1], m[2], m[3]) : null;
         }
         // Só a duração ("plantão de 24 horas" sem início): retorna horas
         function parseDurationOnly(t) { const m = t.match(/\b(?:de|com)\s+(\d{1,2})\s*(?:h|horas)\b/); return m ? Math.min(24, parseInt(m[1], 10)) : null; }
@@ -1827,12 +2253,12 @@
             const profRes = resolveProfessional(base, locRes.span);
             if (profRes.error) return logAction(text, profRes.error, 'error');
             const targetProf = profRes.prof || (currentViewProfId !== 0 ? professionals.find(p => p.id === currentViewProfId) : null)
-                || (authUser && authUser.role !== 'admin' ? professionals.find(p => p.id === authUser.profId) : null)
+                || (authUser && authUser.profId != null ? professionals.find(p => p.id === authUser.profId) : null)
                 || (professionals.length === 1 ? professionals[0] : null);
             if (!targetProf) return logAction(text, `Profissional não identificado. Na Visão Geral, cite o nome (ex.: "...para Dr. Enrique").`, 'error');
             if (authUser && authUser.role !== 'admin' && targetProf.id !== authUser.profId) return logAction(text, 'Seu perfil só permite lançar na sua própria agenda.', 'error');
 
-            const range = parseTimeRange(text);
+            let range = parseTimeRange(text);
             const examMatch = t.match(/\b(\d{1,4})\s*(?:exames?|ultrassons?|ultrassonografias?|laudos?)\b/);
             const examsCount = examMatch ? parseInt(examMatch[1], 10) : 0;
             const durationOnly = range ? null : parseDurationOnly(t);
@@ -1847,6 +2273,15 @@
                 createdLoc = true;
             }
             const type = examsCount ? 'exame' : (detectType(base) || targetLoc.locType || 'plantao');
+
+            // Plantões têm carga fixa por local: completa o horário com o padrão cadastrado
+            let usedDefault = false;
+            if (!range) {
+                const startOnly = parseStartOnly(t);
+                const hours = durationOnly || (type === 'plantao' ? targetLoc.shiftHours : 0);
+                if (startOnly !== null && hours) { range = { startMin: startOnly % 1440, durationMin: Math.round(hours * 60) }; usedDefault = durationOnly ? false : 'carga padrão do local'; }
+                else if (startOnly === null && type === 'plantao' && targetLoc.shiftStart != null && hours) { range = { startMin: targetLoc.shiftStart, durationMin: Math.round(hours * 60) }; usedDefault = durationOnly ? 'início padrão do local' : 'horário padrão do local'; }
+            }
 
             const segments = range ? splitByMidnight(range.startMin, range.durationMin) : [null];
             const groupId = segments.length > 1 ? newId() : null;
@@ -1884,8 +2319,8 @@
             if (createdLoc && !validCoord(targetLoc.lat, targetLoc.lng)) autoGeocodeLocation(targetLoc);
 
             const details = [];
-            if (range) details.push(`${fmtHours(range.durationMin / 60)}h${planned.length > 1 ? ', dividido na meia-noite' : ''}`);
-            else if (durationOnly) details.push(`${durationOnly}h, sem horário de início`);
+            if (range) details.push(`${fmtHours(range.durationMin / 60)}h${planned.length > 1 ? ', dividido na meia-noite' : ''}${usedDefault ? ', ' + usedDefault : ''}`);
+            else if (durationOnly && !range) details.push(`${durationOnly}h, sem horário de início`);
             else details.push('sem horário');
             if (type === 'exame') details.push(examsCount ? `${examsCount} exame(s)` : 'informe o nº de exames');
             const value = planned.reduce((s, e) => s + eventValue(e), 0);
@@ -2054,13 +2489,13 @@
             saveData(); renderApp();
         }
         function toggleLocation(locId) { const loc = locations.find(l => l.id === locId); if (loc) { loc.expanded = !loc.expanded; saveData(); renderApp(); } }
-        function addNewLocation(name = "Novo Local", { silent = false, city = '', lat = null, lng = null, locType = 'plantao', hourlyRate = 0, examRate = 0 } = {}) {
+        function addNewLocation(name = "Novo Local", { silent = false, city = '', lat = null, lng = null, locType = 'plantao', hourlyRate = 0, examRate = 0, shiftHours = 0, shiftStart = null } = {}) {
             // Cores ainda não usadas têm prioridade, para facilitar a leitura do calendário
             const used = new Set(locations.map(l => l.dotColor));
             const free = colorPalette.filter(c => !used.has(c.dot));
             const pool = free.length ? free : colorPalette;
             const color = pool[Math.floor(Math.random() * pool.length)];
-            const newLoc = { id: newId(), name: String(name).trim() || 'Novo Local', city: String(city || '').trim(), lat: validCoord(lat, lng) ? lat : null, lng: validCoord(lat, lng) ? lng : null, locType: normType(locType), colorClass: color.bg, dotColor: color.dot, expanded: true, hourlyRate, examRate };
+            const newLoc = { id: newId(), name: String(name).trim() || 'Novo Local', city: String(city || '').trim(), lat: validCoord(lat, lng) ? lat : null, lng: validCoord(lat, lng) ? lng : null, locType: normType(locType), colorClass: color.bg, dotColor: color.dot, expanded: true, hourlyRate, examRate, shiftHours, shiftStart };
             locations.push(newLoc);
             saveData();
             if (!silent) renderApp();
@@ -2071,7 +2506,7 @@
         let editingLocId = null;
         function openLocationModal(locId) {
             editingLocId = locId;
-            const loc = locations.find(l => l.id === locId) || { name: '', city: stateSuffix() ? ` - ${stateSuffix()}` : '', lat: null, lng: null, locType: 'plantao', hourlyRate: 0, examRate: 0 };
+            const loc = locations.find(l => l.id === locId) || { name: '', city: stateSuffix() ? ` - ${stateSuffix()}` : '', lat: null, lng: null, locType: 'plantao', hourlyRate: 0, examRate: 0, shiftHours: 0, shiftStart: null };
             document.getElementById('loc-modal-title').innerHTML = `<i class="fas fa-hospital text-pokulai-brand mr-2"></i> ${locId ? 'Editar local' : 'Novo local'}`;
             document.getElementById('loc-name').value = loc.name;
             document.getElementById('loc-city').value = loc.city.trim() === `- ${stateSuffix()}` ? '' : loc.city;
@@ -2080,6 +2515,8 @@
             document.getElementById('loc-type').innerHTML = typeOptions(loc.locType);
             document.getElementById('loc-hourly').value = loc.hourlyRate || '';
             document.getElementById('loc-exam').value = loc.examRate || '';
+            document.getElementById('loc-shift-hours').value = loc.shiftHours || '';
+            document.getElementById('loc-shift-start').value = loc.shiftStart != null ? `${pad2(Math.floor(loc.shiftStart / 60))}:${pad2(loc.shiftStart % 60)}` : '';
             document.getElementById('loc-geo-status').innerText = validCoord(loc.lat, loc.lng) ? 'Localização cadastrada.' : 'Sem localização: clique em "Localizar" para buscar a cidade no mapa.';
             document.getElementById('loc-modal').classList.remove('hidden');
             setTimeout(() => document.getElementById('loc-name').focus(), 50);
@@ -2107,7 +2544,9 @@
                 lat: validCoord(lat, lng) ? lat : null, lng: validCoord(lat, lng) ? lng : null,
                 locType: normType(document.getElementById('loc-type').value),
                 hourlyRate: Math.max(0, parseNum(document.getElementById('loc-hourly').value) || 0),
-                examRate: Math.max(0, parseNum(document.getElementById('loc-exam').value) || 0)
+                examRate: Math.max(0, parseNum(document.getElementById('loc-exam').value) || 0),
+                shiftHours: Math.min(48, Math.max(0, parseNum(document.getElementById('loc-shift-hours').value) || 0)),
+                shiftStart: (() => { const m = document.getElementById('loc-shift-start').value.match(/^(\d{1,2}):(\d{2})/); return m ? Math.min(1439, +m[1] * 60 + +m[2]) : null; })()
             };
             const loc = locations.find(l => l.id === editingLocId);
             if (loc) {
@@ -2229,7 +2668,7 @@
                 costPerKm: document.getElementById('set-cost').value, useRoutes: document.getElementById('set-routes').checked
             }));
             routeFailed.clear();
-            saveData(); closeSettingsModal(); renderApp();
+            saveData(); scheduleSettingsSync(); closeSettingsModal(); renderApp();
         }
 
         // Teclas em campos editáveis: Enter confirma, Esc desfaz
@@ -2267,6 +2706,7 @@
                     <div onclick="selectProfessional(${p.id})" class="group cursor-pointer flex items-center p-2 rounded transition-colors ${p.id === currentViewProfId ? 'prof-selected' : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'}">
                         <div class="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-xs font-bold mr-3"><i class="fas fa-user"></i></div>
                         <div class="flex-1 min-w-0"><p class="text-sm font-bold truncate">${esc(p.name)}</p><p class="text-[10px] opacity-70 truncate">${esc(p.spec)}${p.crm ? ' · CRM ' + esc(p.crm) : ' · <span class="text-amber-600">sem CRM</span>'}</p></div>
+                        ${cloudActive() && cloud.role === 'admin' ? `<button onclick="event.stopPropagation(); inviteProfessional(${p.id})" class="text-gray-400 hover:text-pokulai-brand p-1 opacity-60 group-hover:opacity-100" title="Convidar por e-mail para usar a agenda"><i class="fas fa-envelope text-[10px]"></i></button>` : ''}
                         <button onclick="event.stopPropagation(); editProfessional(${p.id})" class="text-gray-400 hover:text-pokulai-brand p-1 opacity-60 group-hover:opacity-100" title="Editar"><i class="fas fa-pen text-[10px]"></i></button>
                         <button onclick="event.stopPropagation(); deleteProfessional(${p.id})" class="text-gray-400 hover:text-red-500 p-1 opacity-60 group-hover:opacity-100" title="Excluir"><i class="fas fa-trash text-[10px]"></i></button>
                         ${p.id === currentViewProfId ? '<i class="fas fa-check text-pokulai-brand dark:text-pokulai-accent text-sm ml-1"></i>' : ''}
@@ -2308,7 +2748,7 @@
                         </li>`;
                 }).join('');
                 const isExpanded = loc.expanded !== false; const bodyClass = isExpanded ? '' : 'hidden'; const chevronIcon = isExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
-                const rateInfo = [loc.city, loc.hourlyRate ? `${fmtMoney(loc.hourlyRate)}/h` : '', loc.examRate ? `${fmtMoney(loc.examRate)}/exame` : '', validCoord(loc.lat, loc.lng) ? '' : 'sem localização'].filter(Boolean).join(' · ');
+                const rateInfo = [loc.city, loc.shiftHours ? `plantão ${fmtHours(loc.shiftHours)}h${loc.shiftStart != null ? ' às ' + fmtMin(loc.shiftStart) : ''}` : '', loc.hourlyRate ? `${fmtMoney(loc.hourlyRate)}/h` : '', loc.examRate ? `${fmtMoney(loc.examRate)}/exame` : '', validCoord(loc.lat, loc.lng) ? '' : 'sem localização'].filter(Boolean).join(' · ');
                 legendHtml += `
                     <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm bg-white dark:bg-gray-800 overflow-hidden text-gray-800 dark:text-gray-200">
                         <div class="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-700 select-none">
