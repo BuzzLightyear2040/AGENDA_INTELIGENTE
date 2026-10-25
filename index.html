@@ -2,7 +2,10 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0F766E">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Agenda Médica & Apuração de Plantões - Pokulai</title>
 
     <script>
@@ -78,6 +81,9 @@
 
         .export-menu { display: none; bottom: 100%; right: 0; margin-bottom: 0.5rem; }
         .export-btn-group:hover .export-menu, .export-btn-group.open .export-menu { display: flex; flex-direction: column; }
+        .field { box-sizing: border-box; width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.25rem; background: white; color: #1f2937; font-size: 0.8rem; }
+        html.dark .field { background: #374151; border-color: #4b5563; color: white; }
+        .field-label { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: #6b7280; margin-bottom: 0.25rem; }
     </style>
 </head>
 <body class="bg-pokulai-background dark:bg-gray-900 h-screen flex overflow-hidden font-sans relative transition-colors duration-200 text-gray-800 dark:text-gray-100">
@@ -88,9 +94,15 @@
     <aside id="main-sidebar" class="w-96 max-w-full flex-shrink-0 bg-white dark:bg-pokulai-sidebar border-r border-gray-200 dark:border-gray-700 shadow-lg flex flex-col h-full overflow-y-auto transition-colors duration-200 z-20">
         <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-black/20 flex items-center justify-between sticky top-0 z-10 w-96 max-w-[100vw]">
             <h1 class="text-xl font-bold tracking-wide dark:text-white text-gray-800 whitespace-nowrap"><i class="fas fa-stethoscope mr-2 text-pokulai-accent"></i> POKULAI</h1>
-            <button onclick="openConfigModal()" class="text-xs text-gray-500 hover:text-pokulai-brand dark:text-gray-400 p-1" title="Configurar Supabase & MFA">
-                <i class="fas fa-cog text-base"></i>
-            </button>
+            <div class="flex items-center space-x-1">
+                <button onclick="openSettingsModal()" class="text-xs text-gray-500 hover:text-pokulai-brand dark:text-gray-400 p-1" title="Base, deslocamento e custos">
+                    <i class="fas fa-route text-base"></i>
+                </button>
+                <button onclick="openConfigModal()" class="text-xs text-gray-500 hover:text-pokulai-brand dark:text-gray-400 p-1" title="Configurar Supabase & MFA">
+                    <i class="fas fa-cog text-base"></i>
+                </button>
+                <button onclick="toggleSidebar()" class="md:hidden text-xs text-gray-500 p-1" title="Fechar menu"><i class="fas fa-times text-base"></i></button>
+            </div>
         </div>
 
         <!-- Bloco de Autenticação (Supabase & Simulação) -->
@@ -138,13 +150,13 @@
 
         <div id="sidebar-main-content" class="flex-1 flex flex-col w-96 max-w-[100vw]">
             <div class="p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-700">
-                <h2 class="text-gray-500 dark:text-gray-400 uppercase text-[10px] font-bold">Gestão de Plantões / Exames</h2>
-                <button onclick="addNewLocation()" class="bg-pokulai-brand hover:bg-teal-600 text-white px-2 py-1 rounded text-xs shadow-sm transition-colors"><i class="fas fa-plus mr-1"></i> Local</button>
+                <h2 class="text-gray-500 dark:text-gray-400 uppercase text-[10px] font-bold">Locais / Lançamentos do mês</h2>
+                <button onclick="openLocationModal(null)" class="bg-pokulai-brand hover:bg-teal-600 text-white px-2 py-1 rounded text-xs shadow-sm transition-colors"><i class="fas fa-plus mr-1"></i> Local</button>
             </div>
 
             <div class="p-4 flex-1 overflow-y-auto">
                 <div id="legend-container" class="space-y-3 mb-8"></div>
-                <h2 class="text-gray-500 dark:text-gray-400 uppercase text-[10px] font-bold mb-4 border-t border-gray-200 dark:border-gray-700 pt-6"><i class="fas fa-robot text-pokulai-accent"></i> Histórico do Assistente NLP</h2>
+                <h2 class="text-gray-500 dark:text-gray-400 uppercase text-[10px] font-bold mb-4 border-t border-gray-200 dark:border-gray-700 pt-6"><i class="fas fa-robot text-pokulai-accent"></i> Histórico de Comandos (voz/texto)</h2>
                 <div id="voice-log-container" class="space-y-2 text-sm"></div>
             </div>
         </div>
@@ -152,14 +164,14 @@
 
     <!-- ÁREA PRINCIPAL -->
     <main class="flex-1 min-w-0 flex flex-col h-full overflow-hidden relative">
-        <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-3 md:px-6 py-4 flex items-center justify-between shadow-sm transition-colors duration-200 z-30 flex-shrink-0">
+        <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-3 md:px-6 py-3 md:py-4 flex items-center justify-between shadow-sm transition-colors duration-200 z-30 flex-shrink-0">
             <div class="flex items-center space-x-2 md:space-x-4 min-w-0">
                 <button onclick="toggleSidebar()" class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Ocultar/Mostrar Menu Lateral">
                     <i class="fas fa-bars text-gray-600 dark:text-gray-300 text-xl"></i>
                 </button>
-                <div class="flex items-center space-x-2 min-w-0">
+                <div class="flex items-center space-x-1 md:space-x-2 min-w-0">
                     <button onclick="changeMonth(-1)" class="p-1 text-gray-500 hover:text-pokulai-brand" title="Mês anterior"><i class="fas fa-chevron-left"></i></button>
-                    <h2 class="text-lg md:text-2xl font-semibold text-gray-800 dark:text-white whitespace-nowrap" id="current-month-display"></h2>
+                    <h2 class="text-base md:text-2xl font-semibold text-gray-800 dark:text-white whitespace-nowrap" id="current-month-display"></h2>
                     <button onclick="changeMonth(1)" class="p-1 text-gray-500 hover:text-pokulai-brand" title="Próximo mês"><i class="fas fa-chevron-right"></i></button>
                     <button onclick="goToToday()" class="hidden sm:inline-block text-[11px] px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-pokulai-brand">Hoje</button>
                 </div>
@@ -168,152 +180,202 @@
                 </div>
             </div>
 
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-1 md:space-x-3">
+                <button id="view-toggle" onclick="toggleViewMode()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Alternar calendário / lista">
+                    <i id="view-toggle-icon" class="fas fa-list text-gray-500 dark:text-gray-400 text-xl"></i>
+                </button>
                 <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Alternar Tema Claro/Escuro">
                     <i id="theme-icon" class="fas fa-moon text-gray-500 text-xl"></i>
                 </button>
-                <button onclick="toggleFullScreen()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Tela Cheia">
+                <button onclick="toggleFullScreen()" class="hidden sm:block p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none" title="Tela Cheia">
                     <i id="fullscreen-icon" class="fas fa-expand text-gray-500 dark:text-gray-400 text-xl"></i>
                 </button>
             </div>
         </header>
 
-        <!-- Grade do Calendário -->
+        <!-- Grade do Calendário / Lista -->
         <div class="flex-1 flex flex-col p-2 md:p-4 overflow-hidden relative">
             <div class="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden transition-colors duration-200 relative">
-                <div class="flex-1 flex flex-col overflow-y-auto relative">
+                <div id="calendar-view" class="flex-1 flex flex-col overflow-y-auto relative">
                     <div class="sticky top-0 z-20 grid grid-cols-7 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 text-sm shadow-sm flex-shrink-0">
                         <div class="day-header text-red-500 dark:text-red-400">Dom</div><div class="day-header">Seg</div><div class="day-header">Ter</div><div class="day-header">Qua</div><div class="day-header">Qui</div><div class="day-header">Sex</div><div class="day-header text-red-500 dark:text-red-400">Sáb</div>
                     </div>
                     <div id="calendar-body" class="calendar-grid flex-1 text-sm relative z-0"></div>
                 </div>
+                <div id="list-view" class="hidden flex-1 overflow-y-auto p-3 pb-40 space-y-3 text-sm"></div>
             </div>
         </div>
 
-        <!-- Barra inferior de NLP -->
-        <div class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 px-3 md:px-6 flex items-center shadow-lg z-30 transition-colors duration-200 flex-shrink-0">
-            <button onclick="document.getElementById('chat-attachment').click()" class="text-gray-400 hover:text-pokulai-brand dark:hover:text-pokulai-accent transition-colors mr-4 focus:outline-none" title="Anexar arquivo ou foto">
+        <!-- Barra inferior de comandos -->
+        <div class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 md:p-4 px-3 md:px-6 flex items-center shadow-lg z-30 transition-colors duration-200 flex-shrink-0">
+            <button onclick="document.getElementById('chat-attachment').click()" class="text-gray-400 hover:text-pokulai-brand dark:hover:text-pokulai-accent transition-colors mr-3 focus:outline-none" title="Anexar arquivo ou foto">
                 <i class="fas fa-plus-circle text-2xl"></i>
             </button>
             <div class="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900 rounded-full flex items-center px-4 py-2 border border-gray-300 dark:border-gray-700">
-                <input type="text" id="nlp-text-input" maxlength="500" placeholder="Digite o comando... Ex: Agendar Dra. Maria dia 5 de outubro em Planalto das 19 as 7" class="flex-1 min-w-0 bg-transparent border-none focus:outline-none text-gray-700 dark:text-gray-200 text-sm" onkeydown="handleTextCommandSubmit(event)">
+                <input type="text" id="nlp-text-input" maxlength="500" placeholder="Ex: Plantão dia 5 em Jaboticaba das 7 às 7 · Exame dia 6 na Radiplan 20 exames" class="flex-1 min-w-0 bg-transparent border-none focus:outline-none text-gray-700 dark:text-gray-200 text-sm" onkeydown="handleTextCommandSubmit(event)">
                 <button onclick="processTextInput()" class="text-pokulai-brand dark:text-pokulai-accent ml-2 hover:opacity-80 focus:outline-none" title="Enviar comando">
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </div>
         </div>
 
-        <!-- GRUPO DE BOTÕES FLUTUANTES (FAB) NO CANTO INFERIOR DIREITO -->
-        <div class="absolute bottom-24 right-6 flex flex-col items-center space-y-4 z-50">
-            <!-- 1. Botão IA de Rastreamento e Apuração de Plantões -->
-            <button id="fab-ai-shifts" onclick="openShiftTrackerModal()" class="w-14 h-14 bg-gradient-to-tr from-cyan-600 to-teal-500 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform border-2 border-white dark:border-gray-800 relative group" title="Apuração de Plantões & Relatório">
+        <!-- GRUPO DE BOTÕES FLUTUANTES (FAB) -->
+        <div class="absolute bottom-24 right-4 md:right-6 flex flex-col items-center space-y-4 z-50">
+            <!-- 1. Insights & Relatórios -->
+            <button id="fab-ai-shifts" onclick="openInsightsModal()" class="w-14 h-14 bg-gradient-to-tr from-cyan-600 to-teal-500 text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform border-2 border-white dark:border-gray-800 relative group" title="Insights, apuração e relatórios">
                 <i class="fas fa-brain text-xl"></i>
                 <span class="absolute right-16 bg-gray-900 text-white text-xs px-2.5 py-1 rounded shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                    Apurar Plantões
+                    Insights & Relatórios
                 </span>
             </button>
 
-            <!-- 2. Microfone com Gravação Contínua -->
-            <button id="fab-record" onclick="toggleVoiceCommand()" class="w-14 h-14 bg-pokulai-brand text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border-2 border-white dark:border-gray-800" title="Comando de Voz Contínuo">
-                <i class="fas fa-microphone text-xl"></i>
+            <!-- 2. Microfone (para sozinho ao terminar de falar) -->
+            <button id="fab-record" onclick="toggleVoiceCommand()" class="w-16 h-16 bg-pokulai-brand text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border-2 border-white dark:border-gray-800" title="Toque e fale o compromisso">
+                <i class="fas fa-microphone text-2xl"></i>
             </button>
 
-            <!-- 3. Exportar (hover no desktop, toque/clique no celular) -->
+            <!-- 3. Exportar -->
             <div class="relative export-btn-group" id="export-group">
                 <div class="export-menu absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl overflow-hidden text-sm">
-                    <button onclick="exportToExcel()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-green-600 font-bold whitespace-nowrap"><i class="fas fa-file-excel mr-2"></i> Exportar Excel</button>
+                    <button onclick="exportToExcel()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-green-600 font-bold whitespace-nowrap"><i class="fas fa-file-excel mr-2"></i> Planilha do mês (Excel)</button>
                     <button onclick="exportToWord()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 font-bold whitespace-nowrap border-y border-gray-100 dark:border-gray-700"><i class="fas fa-file-word mr-2"></i> Exportar Word</button>
-                    <button onclick="exportToPDF()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 font-bold whitespace-nowrap"><i class="fas fa-file-pdf mr-2"></i> Exportar PDF Padrão</button>
+                    <button onclick="exportToPDF()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 font-bold whitespace-nowrap"><i class="fas fa-file-pdf mr-2"></i> Relatório do mês (PDF)</button>
+                    <button onclick="exportTripsCSV()" class="flex items-center px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold whitespace-nowrap border-t border-gray-100 dark:border-gray-700"><i class="fas fa-car mr-2"></i> Deslocamentos (CSV)</button>
                 </div>
-                <button onclick="toggleExportMenu(event)" class="w-14 h-14 bg-gray-800 dark:bg-gray-700 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border-2 border-white dark:border-gray-800" title="Exportar Relatórios do mês exibido">
+                <button onclick="toggleExportMenu(event)" class="w-14 h-14 bg-gray-800 dark:bg-gray-700 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform border-2 border-white dark:border-gray-800" title="Exportar relatórios do mês exibido">
                     <i class="fas fa-download text-xl"></i>
                 </button>
             </div>
         </div>
     </main>
 
-    <!-- MODAL: APURAÇÃO INTELIGENTE DE PLANTÕES (IA SHIFT TRACKER) -->
-    <div id="ai-shifts-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
-            <!-- Cabeçalho -->
-            <div class="p-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-teal-800 to-cyan-900 text-white flex items-center justify-between">
+    <!-- MODAL: INSIGHTS, APURAÇÃO E RELATÓRIOS -->
+    <div id="ai-shifts-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-2 md:p-4">
+        <div class="bg-white dark:bg-gray-800 w-full max-w-4xl rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[95vh]">
+            <div class="p-4 md:p-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-teal-800 to-cyan-900 text-white flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-teal-300 text-xl font-bold">
-                        <i class="fas fa-robot"></i>
-                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-teal-300 text-xl font-bold"><i class="fas fa-brain"></i></div>
                     <div>
-                        <h3 class="font-bold text-lg">Apuração de Plantões</h3>
-                        <p class="text-xs text-teal-200">Filtro exclusivo para escalas de plantão hospitalar (desconsidera exames e outros compromissos)</p>
+                        <h3 class="font-bold text-lg">Insights & Relatórios</h3>
+                        <p class="text-xs text-teal-200">Horas de plantão, exames, faturamento, deslocamento e alertas do mês</p>
                     </div>
                 </div>
-                <button onclick="closeShiftTrackerModal()" class="text-white/80 hover:text-white p-2">
-                    <i class="fas fa-times text-lg"></i>
-                </button>
+                <button onclick="closeInsightsModal()" class="text-white/80 hover:text-white p-2"><i class="fas fa-times text-lg"></i></button>
             </div>
 
-            <!-- Corpo da Apuração -->
-            <div class="p-6 overflow-y-auto space-y-6 text-sm">
-                <!-- Filtros da Auditoria -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 dark:bg-gray-700/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="p-4 md:p-6 overflow-y-auto space-y-5 text-sm">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 bg-gray-50 dark:bg-gray-700/40 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Profissional</label>
-                        <select id="ai-filter-prof" onchange="runShiftAudit()" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs"></select>
+                        <label class="field-label">Profissional</label>
+                        <select id="ai-filter-prof" onchange="runInsights()" class="field"></select>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Mês / Ano</label>
+                        <label class="field-label">Mês / Ano</label>
                         <div class="flex space-x-2">
-                            <select id="ai-filter-month" onchange="runShiftAudit()" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs"></select>
-                            <input type="number" id="ai-filter-year" min="2000" max="2100" onchange="runShiftAudit()" class="w-20 p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs text-center">
+                            <select id="ai-filter-month" onchange="runInsights()" class="field"></select>
+                            <input type="number" id="ai-filter-year" min="2000" max="2100" onchange="runInsights()" class="field !w-24 text-center">
                         </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">Cidade / Local de Emissão</label>
-                        <input type="text" id="ai-report-city" value="Ibirubá - RS" maxlength="80" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-white text-xs">
+                        <label class="field-label">Cidade de emissão (relatórios)</label>
+                        <input type="text" id="ai-report-city" maxlength="80" class="field">
                     </div>
                 </div>
 
-                <!-- Resumo dos Cálculos -->
-                <div id="ai-audit-summary" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="bg-teal-50 dark:bg-teal-900/30 p-4 rounded-lg border border-teal-200 dark:border-teal-800">
-                        <span class="text-xs uppercase font-bold text-teal-700 dark:text-teal-300 block">Total de Horas em Plantão</span>
-                        <span id="ai-total-hours" class="text-3xl font-extrabold text-teal-900 dark:text-teal-100">0h</span>
-                        <span class="text-[11px] text-teal-600 dark:text-teal-400 block mt-1">Apenas escalas do tipo Plantão</span>
-                    </div>
-                    <div class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                        <span class="text-xs uppercase font-bold text-blue-700 dark:text-blue-300 block">Plantões Identificados</span>
-                        <span id="ai-total-shifts" class="text-3xl font-extrabold text-blue-900 dark:text-blue-100">0</span>
-                        <span class="text-[11px] text-blue-600 dark:text-blue-400 block mt-1">Plantões que viram a meia-noite contam como 1</span>
-                    </div>
-                    <div class="bg-amber-50 dark:bg-amber-900/30 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
-                        <span class="text-xs uppercase font-bold text-amber-700 dark:text-amber-300 block">Hospitais / Unidades</span>
-                        <span id="ai-total-locations" class="text-3xl font-extrabold text-amber-900 dark:text-amber-100">0</span>
-                        <span class="text-[11px] text-amber-600 dark:text-amber-400 block mt-1">Instituições distintas</span>
-                    </div>
-                </div>
+                <div id="ai-cards" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
 
-                <div id="ai-audit-warnings" class="hidden p-3 rounded border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-300"></div>
-
-                <!-- Detalhamento por Hospital/Empresa -->
                 <div>
-                    <h4 class="font-bold text-gray-700 dark:text-gray-300 uppercase text-xs mb-2"><i class="fas fa-hospital mr-1 text-pokulai-brand"></i> Apuração Detalhada por Hospital / Empresa</h4>
-                    <div id="ai-breakdown-table" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"></div>
+                    <h4 class="font-bold text-gray-700 dark:text-gray-300 uppercase text-xs mb-2"><i class="fas fa-lightbulb mr-1 text-amber-500"></i> Insights automáticos</h4>
+                    <ul id="ai-insights" class="space-y-1.5 text-xs"></ul>
                 </div>
 
-                <!-- Aviso de Auditoria -->
-                <div class="p-3 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700 text-xs text-gray-600 dark:text-gray-400 flex items-start space-x-2">
+                <div>
+                    <h4 class="font-bold text-gray-700 dark:text-gray-300 uppercase text-xs mb-2"><i class="fas fa-hospital mr-1 text-pokulai-brand"></i> Por local / unidade</h4>
+                    <div id="ai-breakdown-table" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto"></div>
+                </div>
+
+                <div id="ai-team-block" class="hidden">
+                    <h4 class="font-bold text-gray-700 dark:text-gray-300 uppercase text-xs mb-2"><i class="fas fa-users mr-1 text-pokulai-brand"></i> Por profissional</h4>
+                    <div id="ai-team-table" class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-x-auto"></div>
+                </div>
+
+                <div class="p-3 bg-gray-50 dark:bg-gray-700/30 rounded border border-gray-200 dark:border-gray-700 text-[11px] text-gray-600 dark:text-gray-400 flex items-start space-x-2">
                     <i class="fas fa-info-circle text-pokulai-accent mt-0.5"></i>
-                    <span>A apuração considera apenas lançamentos com tipo <strong>Plantão</strong>. Exames, consultas ou reuniões são descartados do cômputo de horas e do relatório. O PDF é uma <strong>autodeclaração</strong> baseada nos seus lançamentos e só tem validade com a assinatura da contratante.</span>
+                    <span><strong>Plantão</strong> soma horas × valor/hora do local. <strong>Exame</strong> soma nº de exames × valor/exame. <strong>Cliente/Outro</strong> não entram no faturamento. Distâncias usam rotas reais quando há internet (OpenStreetMap/OSRM) e, sem internet, uma estimativa em linha reta × 1,3. A declaração de plantões é uma <strong>autodeclaração</strong> que só vale com a assinatura da contratante.</span>
                 </div>
             </div>
 
-            <!-- Rodapé e Botões de Ação do Modal -->
-            <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-between items-center">
-                <button onclick="closeShiftTrackerModal()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">Fechar</button>
-                <div class="flex space-x-2">
-                    <button onclick="generateStructuredShiftReportPDF()" class="bg-pokulai-brand text-white px-4 py-2 rounded text-xs font-bold hover:bg-teal-600 transition-colors shadow-md flex items-center">
-                        <i class="fas fa-file-signature mr-2"></i> Exportar Relatório de Apuração (PDF)
-                    </button>
+            <div class="p-3 md:p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex flex-wrap gap-2 justify-between items-center">
+                <button onclick="closeInsightsModal()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">Fechar</button>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportInsights('csv')" class="bg-gray-700 text-white px-3 py-2 rounded text-xs font-bold hover:bg-gray-600"><i class="fas fa-car mr-1"></i> Deslocamentos (CSV)</button>
+                    <button onclick="exportInsights('xlsx')" class="bg-green-700 text-white px-3 py-2 rounded text-xs font-bold hover:bg-green-600"><i class="fas fa-file-excel mr-1"></i> Planilha</button>
+                    <button onclick="exportInsights('pdf')" class="bg-red-700 text-white px-3 py-2 rounded text-xs font-bold hover:bg-red-600"><i class="fas fa-file-pdf mr-1"></i> Relatório completo</button>
+                    <button onclick="generateStructuredShiftReportPDF()" class="bg-pokulai-brand text-white px-3 py-2 rounded text-xs font-bold hover:bg-teal-600"><i class="fas fa-file-signature mr-1"></i> Declaração de plantões</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CADASTRO DE LOCAL -->
+    <div id="loc-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 w-full max-w-lg rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
+                <h3 id="loc-modal-title" class="font-bold text-sm text-gray-800 dark:text-white"><i class="fas fa-hospital text-pokulai-brand mr-2"></i> Local de trabalho</h3>
+                <button onclick="closeLocationModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+                <div><label class="field-label">Nome do local</label><input id="loc-name" class="field" maxlength="100" placeholder="Ex.: Hospital Comunitário Jaboticaba"></div>
+                <div>
+                    <label class="field-label">Cidade (com estado)</label>
+                    <div class="flex space-x-2"><input id="loc-city" class="field" maxlength="80" placeholder="Ex.: Jaboticaba - RS"><button onclick="geocodeLocModal()" class="bg-gray-700 text-white px-3 rounded font-bold whitespace-nowrap"><i class="fas fa-map-marker-alt mr-1"></i> Localizar</button></div>
+                    <p id="loc-geo-status" class="text-[10px] text-gray-500 mt-1"></p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="field-label">Latitude</label><input id="loc-lat" class="field" inputmode="decimal" placeholder="-28.0000"></div>
+                    <div><label class="field-label">Longitude</label><input id="loc-lng" class="field" inputmode="decimal" placeholder="-53.0000"></div>
+                </div>
+                <div><label class="field-label">Tipo padrão dos lançamentos</label><select id="loc-type" class="field"></select></div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="field-label">Valor por hora de plantão (R$)</label><input id="loc-hourly" type="number" min="0" step="0.01" class="field" placeholder="0,00"></div>
+                    <div><label class="field-label">Valor por exame (R$)</label><input id="loc-exam" type="number" min="0" step="0.01" class="field" placeholder="0,00"></div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-end space-x-2">
+                <button onclick="closeLocationModal()" class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs">Cancelar</button>
+                <button onclick="saveLocationModal()" class="bg-pokulai-brand text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-teal-600">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: BASE, DESLOCAMENTO E CUSTOS -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 w-full max-w-lg rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
+                <h3 class="font-bold text-sm text-gray-800 dark:text-white"><i class="fas fa-route text-pokulai-brand mr-2"></i> Base, deslocamento e custos</h3>
+                <button onclick="closeSettingsModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+                <div>
+                    <label class="field-label">Cidade base (onde você mora / sai)</label>
+                    <div class="flex space-x-2"><input id="set-base" class="field" maxlength="80" placeholder="Ex.: Ibirubá - RS"><button onclick="geocodeBase()" class="bg-gray-700 text-white px-3 rounded font-bold whitespace-nowrap"><i class="fas fa-map-marker-alt mr-1"></i> Localizar</button></div>
+                    <p id="set-geo-status" class="text-[10px] text-gray-500 mt-1"></p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="field-label">Latitude</label><input id="set-lat" class="field" inputmode="decimal"></div>
+                    <div><label class="field-label">Longitude</label><input id="set-lng" class="field" inputmode="decimal"></div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div><label class="field-label">Velocidade média (km/h)</label><input id="set-speed" type="number" min="20" max="120" class="field"></div>
+                    <div><label class="field-label">Folga mínima (min)</label><input id="set-buffer" type="number" min="0" max="240" class="field"></div>
+                    <div><label class="field-label">Custo por km (R$)</label><input id="set-cost" type="number" min="0" step="0.01" class="field"></div>
+                </div>
+                <label class="flex items-center space-x-2"><input id="set-routes" type="checkbox"> <span>Usar rotas reais pela internet (OpenStreetMap/OSRM) quando disponível</span></label>
+                <p class="text-[10px] text-gray-500">A folga mínima é somada ao tempo de viagem para avisar choque de deslocamento. O custo por km é uma estimativa simples; o cálculo detalhado ficará no seu app de custo operacional (use a exportação CSV de deslocamentos).</p>
+            </div>
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex justify-end space-x-2">
+                <button onclick="closeSettingsModal()" class="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs">Cancelar</button>
+                <button onclick="saveSettingsModal()" class="bg-pokulai-brand text-white px-4 py-1.5 rounded text-xs font-bold hover:bg-teal-600">Salvar</button>
             </div>
         </div>
     </div>
@@ -392,9 +454,27 @@
         function daysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
         function fmtHours(h) { return (Math.round((parseFloat(h) || 0) * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); }
         function fmtMin(min) { if (min >= 1440) return '24h'; const h = Math.floor(min / 60), m = min % 60; return m ? `${pad2(h)}h${pad2(m)}` : `${pad2(h)}h`; }
+        function fmtDuration(min) { min = Math.round(min); const h = Math.floor(min / 60), m = min % 60; return h ? `${h}h${m ? pad2(m) : ''}` : `${m} min`; }
         function fmtDate(e) { return `${pad2(e.date)}/${pad2(e.month)}/${e.year}`; }
+        function fmtMoney(v) { return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+        function fmtKm(km) { return `${Math.round(km).toLocaleString('pt-BR')} km`; }
+        function pdfSafe(s) { return String(s ?? '').replace(/ /g, ' ').replace(/[–—]/g, '-'); }
         function safeFileName(s) { return stripAccents(String(s || '')).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'Relatorio'; }
         function shortName(name) { const parts = String(name || '').split(/\s+/).filter(Boolean); return parts.slice(0, 2).join(' '); }
+        function parseNum(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return Number.isFinite(n) ? n : null; }
+        function levenshtein(a, b) {
+            if (a === b) return 0;
+            const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+            for (let i = 1; i <= a.length; i++) {
+                let diag = prev[0]; prev[0] = i;
+                for (let j = 1; j <= b.length; j++) {
+                    const tmp = prev[j];
+                    prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+                    diag = tmp;
+                }
+            }
+            return prev[b.length];
+        }
 
         function loadJSON(key, fallback) {
             try {
@@ -422,7 +502,28 @@
         let lastId = 0;
         function newId() { lastId = Math.max(Date.now(), lastId + 1); return lastId; }
 
+        async function fetchJSON(url, timeoutMs = 8000) {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+            try {
+                const res = await fetch(url, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return await res.json();
+            } finally { clearTimeout(timer); }
+        }
+
         const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+        const weekdayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+        // Tipos de compromisso: plantão soma horas; exame soma nº de exames; cliente/outro só agenda
+        const TYPES = {
+            plantao: { label: 'Plantão', icon: 'far fa-clock' },
+            exame: { label: 'Exame', icon: 'fas fa-stethoscope' },
+            cliente: { label: 'Cliente', icon: 'fas fa-handshake' },
+            outro: { label: 'Outro', icon: 'fas fa-user' }
+        };
+        function normType(t) { return Object.prototype.hasOwnProperty.call(TYPES, t) ? t : 'plantao'; }
+        function typeOptions(selected) { return Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${k === selected ? 'selected' : ''}>${v.label}</option>`).join(''); }
 
         // =========================================================================
         // GERENCIAMENTO DE TEMA E INTERFACE
@@ -463,11 +564,15 @@
         }
         function goToToday() { const t = new Date(); viewingMonth = t.getMonth() + 1; viewingYear = t.getFullYear(); renderApp(); }
 
+        let viewMode = loadJSON('pokulai_view_mode', null) || (window.innerWidth < 768 ? 'list' : 'calendar');
+        function toggleViewMode() { viewMode = viewMode === 'list' ? 'calendar' : 'list'; storeJSON('pokulai_view_mode', viewMode); renderApp(); }
+
+        const MODAL_IDS = ['ai-shifts-modal', 'supabase-config-modal', 'mfa-modal', 'loc-modal', 'settings-modal'];
         function toggleExportMenu(e) { e.stopPropagation(); document.getElementById('export-group').classList.toggle('open'); }
         document.addEventListener('click', (e) => { const g = document.getElementById('export-group'); if (g && !g.contains(e.target)) g.classList.remove('open'); });
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') return;
-            ['ai-shifts-modal', 'supabase-config-modal', 'mfa-modal'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            MODAL_IDS.forEach(id => document.getElementById(id).classList.add('hidden'));
             document.getElementById('export-group').classList.remove('open');
         });
 
@@ -487,14 +592,15 @@
             { id: 1, name: 'Dr. Enrique Pokulat', spec: 'Médico Titular', crm: '43.210/RS' },
             { id: 2, name: 'Dra. Maria Souza', spec: 'Plantão Secundário', crm: '38.990/RS' }
         ];
+        // Coordenadas aproximadas do centro de cada município (podem ser ajustadas no cadastro do local)
         const DEFAULT_LOCATIONS = [
-            { id: 1, name: 'Hospital Comunitário Jaboticaba', locType: 'plantao', colorClass: 'bg-blue-600', dotColor: 'blue', expanded: true },
-            { id: 2, name: 'Hospital São Lucas - Chapada', locType: 'plantao', colorClass: 'bg-teal-600', dotColor: 'teal', expanded: true },
-            { id: 3, name: 'Hospital de Caridade Santa Maria', locType: 'exame', colorClass: 'bg-purple-600', dotColor: 'purple', expanded: true },
-            { id: 4, name: 'Hospital Regional Santo Ângelo', locType: 'plantao', colorClass: 'bg-orange-600', dotColor: 'orange', expanded: true },
-            { id: 5, name: 'Pronto Atendimento Municipal Planalto', locType: 'plantao', colorClass: 'bg-yellow-500 text-dark-override', dotColor: 'yellow', expanded: true },
-            { id: 6, name: 'Clínica Radiplan (Passo Fundo)', locType: 'exame', colorClass: 'bg-pink-600', dotColor: 'pink', expanded: true },
-            { id: 7, name: 'Hospital de Caridade Carazinho', locType: 'exame', colorClass: 'bg-indigo-600', dotColor: 'indigo', expanded: true }
+            { id: 1, name: 'Hospital Comunitário Jaboticaba', city: 'Jaboticaba - RS', lat: -27.6347, lng: -53.2789, locType: 'plantao', colorClass: 'bg-blue-600', dotColor: 'blue', expanded: true },
+            { id: 2, name: 'Hospital São Lucas - Chapada', city: 'Chapada - RS', lat: -28.0567, lng: -53.0667, locType: 'plantao', colorClass: 'bg-teal-600', dotColor: 'teal', expanded: true },
+            { id: 3, name: 'Hospital de Caridade Santa Maria', city: 'Santa Maria - RS', lat: -29.6842, lng: -53.8069, locType: 'exame', colorClass: 'bg-purple-600', dotColor: 'purple', expanded: true },
+            { id: 4, name: 'Hospital Regional Santo Ângelo', city: 'Santo Ângelo - RS', lat: -28.2994, lng: -54.2633, locType: 'plantao', colorClass: 'bg-orange-600', dotColor: 'orange', expanded: true },
+            { id: 5, name: 'Pronto Atendimento Municipal Planalto', city: 'Planalto - RS', lat: -27.3297, lng: -53.0575, locType: 'plantao', colorClass: 'bg-yellow-500 text-dark-override', dotColor: 'yellow', expanded: true },
+            { id: 6, name: 'Clínica Radiplan (Passo Fundo)', city: 'Passo Fundo - RS', lat: -28.2620, lng: -52.4064, locType: 'exame', colorClass: 'bg-pink-600', dotColor: 'pink', expanded: true },
+            { id: 7, name: 'Hospital de Caridade Carazinho', city: 'Carazinho - RS', lat: -28.2839, lng: -52.7864, locType: 'exame', colorClass: 'bg-indigo-600', dotColor: 'indigo', expanded: true }
         ];
         const DEFAULT_EVENTS = [
             { id: 101, profId: 1, locId: 1, date: 2, month: 10, year: 2026, text: '07:00 às 07:00 (24h)', type: 'plantao', hours: 24, examsCount: 0 },
@@ -511,26 +617,40 @@
             { id: 301, profId: 1, locId: 3, date: 15, month: 10, year: 2026, text: '13:00 às 18:00 / Pouso', type: 'exame', hours: 5, examsCount: 15 },
             { id: 601, profId: 1, locId: 6, date: 6, month: 10, year: 2026, text: '08:00 às 17:00', type: 'exame', hours: 9, examsCount: 20 }
         ];
+        const DEFAULT_SETTINGS = { baseName: 'Ibirubá - RS', baseLat: -28.6275, baseLng: -53.0897, speedKmh: 70, bufferMin: 15, costPerKm: 0, useRoutes: true, reportCity: 'Ibirubá - RS' };
+
+        function validCoord(lat, lng) { return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0); }
 
         function sanitizeProfessionals(list) {
-            if (!Array.isArray(list)) return DEFAULT_PROFESSIONALS.map(p => ({ ...p }));
+            if (!Array.isArray(list)) return DEFAULT_PROFESSIONALS.map(p => ({ ...p, email: '' }));
             return list.filter(p => p && Number.isFinite(Number(p.id)) && String(p.name || '').trim())
                 .map(p => ({ id: Number(p.id), name: String(p.name).trim(), spec: String(p.spec || ''), crm: String(p.crm || ''), email: String(p.email || '') }));
         }
         function sanitizeLocations(list) {
-            if (!Array.isArray(list)) return DEFAULT_LOCATIONS.map(l => ({ ...l }));
+            if (!Array.isArray(list)) list = DEFAULT_LOCATIONS;
             return list.filter(l => l && Number.isFinite(Number(l.id)) && String(l.name || '').trim()).map(l => {
                 const color = allowedColors.find(c => c.bg === l.colorClass && c.dot === l.dotColor) || colorPalette[Math.abs(Number(l.id)) % colorPalette.length];
-                return { id: Number(l.id), name: String(l.name).trim(), locType: l.locType === 'exame' ? 'exame' : 'plantao', colorClass: color.bg, dotColor: color.dot, expanded: l.expanded !== false };
+                const loc = {
+                    id: Number(l.id), name: String(l.name).trim(), city: String(l.city || '').trim(),
+                    lat: parseNum(l.lat), lng: parseNum(l.lng),
+                    locType: normType(l.locType), colorClass: color.bg, dotColor: color.dot, expanded: l.expanded !== false,
+                    hourlyRate: Math.max(0, parseNum(l.hourlyRate) || 0), examRate: Math.max(0, parseNum(l.examRate) || 0)
+                };
+                // Migração: locais de exemplo antigos ganham cidade/coordenadas
+                const def = DEFAULT_LOCATIONS.find(d => d.id === loc.id && d.name === loc.name);
+                if (def && !loc.city) loc.city = def.city;
+                if (def && !validCoord(loc.lat, loc.lng)) { loc.lat = def.lat; loc.lng = def.lng; }
+                if (!validCoord(loc.lat, loc.lng)) { loc.lat = null; loc.lng = null; }
+                return loc;
             });
         }
         function sanitizeEvents(list) {
-            if (!Array.isArray(list)) return DEFAULT_EVENTS.map(e => ({ ...e }));
+            if (!Array.isArray(list)) list = DEFAULT_EVENTS;
             return list.filter(e => e && Number.isFinite(Number(e.id))).map(e => {
                 const ev = {
                     id: Number(e.id), profId: Number(e.profId), locId: Number(e.locId),
                     date: parseInt(e.date, 10), month: parseInt(e.month, 10), year: parseInt(e.year, 10),
-                    text: String(e.text ?? ''), type: e.type === 'exame' ? 'exame' : 'plantao',
+                    text: String(e.text ?? ''), type: normType(e.type),
                     hours: Math.max(0, parseFloat(e.hours) || 0), examsCount: Math.max(0, parseInt(e.examsCount, 10) || 0)
                 };
                 if (Number.isFinite(Number(e.groupId))) ev.groupId = Number(e.groupId);
@@ -542,13 +662,23 @@
             if (!Array.isArray(list)) return [];
             return list.filter(l => l && typeof l === 'object').slice(0, 20).map(l => ({ time: String(l.time || ''), transcript: String(l.transcript || ''), resultStr: String(l.resultStr || ''), status: ['ok', 'warn', 'error'].includes(l.status) ? l.status : 'ok' }));
         }
+        function sanitizeSettings(s) {
+            s = Object.assign({}, DEFAULT_SETTINGS, s && typeof s === 'object' ? s : {});
+            const lat = parseNum(s.baseLat), lng = parseNum(s.baseLng);
+            return {
+                baseName: String(s.baseName || ''), baseLat: validCoord(lat, lng) ? lat : null, baseLng: validCoord(lat, lng) ? lng : null,
+                speedKmh: Math.min(120, Math.max(20, parseNum(s.speedKmh) || 70)), bufferMin: Math.min(240, Math.max(0, parseNum(s.bufferMin) ?? 15)),
+                costPerKm: Math.max(0, parseNum(s.costPerKm) || 0), useRoutes: s.useRoutes !== false, reportCity: String(s.reportCity || s.baseName || '')
+            };
+        }
 
-        let professionals, locations, events, voiceLogs;
+        let professionals, locations, events, voiceLogs, settings;
         function loadAllData() {
             professionals = sanitizeProfessionals(loadJSON('pokulai_profs_v14', null));
             locations = sanitizeLocations(loadJSON('pokulai_locations_v14', null));
             events = sanitizeEvents(loadJSON('pokulai_events_v14', null));
             voiceLogs = sanitizeLogs(loadJSON('pokulai_voice_logs_v14', []));
+            settings = sanitizeSettings(loadJSON('pokulai_settings_v1', null));
             lastId = Math.max(lastId, ...professionals.map(p => p.id), ...locations.map(l => l.id), ...events.map(e => e.id), 0);
         }
         loadAllData();
@@ -563,12 +693,184 @@
             storeJSON('pokulai_locations_v14', locations);
             storeJSON('pokulai_events_v14', events);
             storeJSON('pokulai_voice_logs_v14', voiceLogs);
+            storeJSON('pokulai_settings_v1', settings);
         }
 
         // Sincroniza alterações feitas em outra aba (evita uma aba sobrescrever a outra)
         window.addEventListener('storage', (e) => {
-            if (e.key && /^pokulai_.*_v14$/.test(e.key)) { loadAllData(); renderApp(); }
+            if (e.key && /^pokulai_.*_v(14|1)$/.test(e.key)) { loadAllData(); renderApp(); }
         });
+
+        // =========================================================================
+        // GEOLOCALIZAÇÃO E DESLOCAMENTO
+        // =========================================================================
+        let routeCache = loadJSON('pokulai_routes_v1', {});
+        if (!routeCache || typeof routeCache !== 'object' || Array.isArray(routeCache)) routeCache = {};
+        const routeFailed = new Set();
+        const pendingRoutes = new Set();
+        let routeTimer = null;
+
+        function basePoint() { return validCoord(settings.baseLat, settings.baseLng) ? { lat: settings.baseLat, lng: settings.baseLng, name: settings.baseName || 'Base', isBase: true } : null; }
+        function locPoint(loc) { return loc && validCoord(loc.lat, loc.lng) ? { lat: loc.lat, lng: loc.lng, name: loc.name } : null; }
+        function haversineKm(a, b) {
+            const R = 6371, rad = Math.PI / 180;
+            const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+            const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+            return 2 * R * Math.asin(Math.sqrt(h));
+        }
+        function routeKey(a, b) { return `${a.lat.toFixed(4)},${a.lng.toFixed(4)}|${b.lat.toFixed(4)},${b.lng.toFixed(4)}`; }
+
+        // Distância/tempo de viagem: rota real em cache (OSRM) ou estimativa (linha reta × 1,3 na velocidade média)
+        function travelBetween(a, b) {
+            if (!a || !b || !validCoord(a.lat, a.lng) || !validCoord(b.lat, b.lng)) return null;
+            const straight = haversineKm(a, b);
+            if (straight < 1) return { km: 0, min: 0, source: 'mesmo local' };
+            const cached = routeCache[routeKey(a, b)] || routeCache[routeKey(b, a)];
+            if (cached) return { km: cached.km, min: cached.min, source: 'rota' };
+            queueRoute(a, b);
+            const km = straight * 1.3;
+            return { km, min: km / settings.speedKmh * 60, source: 'estimativa' };
+        }
+
+        function queueRoute(a, b) {
+            if (!settings.useRoutes || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+            const key = routeKey(a, b);
+            if (routeFailed.has(key) || pendingRoutes.has(key)) return;
+            pendingRoutes.add(key);
+            if (!routeTimer) routeTimer = setTimeout(fetchPendingRoutes, 400);
+        }
+        async function fetchPendingRoutes() {
+            routeTimer = null;
+            const keys = [...pendingRoutes].slice(0, 8);
+            let changed = false;
+            for (const key of keys) {
+                const [[lat1, lng1], [lat2, lng2]] = key.split('|').map(p => p.split(',').map(Number));
+                try {
+                    const data = await fetchJSON(`https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`);
+                    const r = data && data.routes && data.routes[0];
+                    if (!r) throw new Error('sem rota');
+                    routeCache[key] = { km: Math.round(r.distance / 100) / 10, min: Math.round(r.duration / 60) };
+                    changed = true;
+                } catch (e) { routeFailed.add(key); }
+                pendingRoutes.delete(key);
+            }
+            if (changed) { storeJSON('pokulai_routes_v1', routeCache); renderApp(); if (!document.getElementById('ai-shifts-modal').classList.contains('hidden')) runInsights(); }
+            if (pendingRoutes.size && !routeTimer) routeTimer = setTimeout(fetchPendingRoutes, 1000);
+        }
+
+        function stateSuffix() { const m = String(settings.baseName || '').match(/[-,/]\s*([A-Za-z]{2})\s*$/); return m ? m[1].toUpperCase() : ''; }
+        // Busca coordenadas da cidade (OpenStreetMap/Nominatim). Sem estado, usa o estado da cidade base.
+        async function geocodeCity(query) {
+            let q = String(query || '').trim();
+            if (!q) return null;
+            if (!/[-,/]\s*[A-Za-z]{2}\s*$/.test(q) && stateSuffix()) q += ', ' + stateSuffix();
+            q = q.replace(/\s*-\s*([A-Za-z]{2})\s*$/, ', $1');
+            const data = await fetchJSON(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&accept-language=pt-BR&q=${encodeURIComponent(q)}`);
+            if (!Array.isArray(data) || !data.length) return null;
+            return { lat: Math.round(parseFloat(data[0].lat) * 10000) / 10000, lng: Math.round(parseFloat(data[0].lon) * 10000) / 10000, label: data[0].display_name };
+        }
+        async function autoGeocodeLocation(loc) {
+            try {
+                const g = await geocodeCity(loc.city || loc.name);
+                if (!g) return logAction(`Local: ${loc.name}`, 'Não encontrei a cidade no mapa. Informe as coordenadas no cadastro do local para calcular deslocamentos.', 'warn');
+                loc.lat = g.lat; loc.lng = g.lng; saveData(); renderApp();
+            } catch (e) { logAction(`Local: ${loc.name}`, 'Sem internet para localizar a cidade. Complete as coordenadas depois no cadastro do local.', 'warn'); }
+        }
+
+        // =========================================================================
+        // ANÁLISE DA AGENDA: CHOQUES DE HORÁRIO E DE DESLOCAMENTO
+        // =========================================================================
+        function dayIndex(y, m, d) { return Math.round(Date.UTC(y, m - 1, d) / 86400000); }
+        function absInterval(ev) {
+            const iv = eventInterval(ev);
+            if (!iv) return null;
+            const base = dayIndex(ev.year, ev.month, ev.date) * 1440;
+            return [base + iv[0], base + iv[1]];
+        }
+        function absToLabel(abs) { const d = new Date(Math.floor(abs / 1440) * 86400000); const m = ((abs % 1440) + 1440) % 1440; return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)} ${fmtMin(m)}`; }
+
+        // Retorna Map(eventId -> [{kind, msg}]) considerando sobreposição e tempo de viagem entre locais
+        function analyzeSchedule(list) {
+            const issues = new Map();
+            const add = (ev, kind, msg) => { if (!issues.has(ev.id)) issues.set(ev.id, []); const arr = issues.get(ev.id); if (!arr.some(i => i.msg === msg)) arr.push({ kind, msg }); };
+            const byProf = new Map();
+            list.forEach(ev => { const iv = absInterval(ev); if (!iv) return; if (!byProf.has(ev.profId)) byProf.set(ev.profId, []); byProf.get(ev.profId).push({ ev, s: iv[0], e: iv[1] }); });
+            const locById = new Map(locations.map(l => [l.id, l]));
+            byProf.forEach(items => {
+                items.sort((a, b) => a.s - b.s || a.e - b.e);
+                let prev = null;
+                for (const cur of items) {
+                    if (prev) {
+                        const sameGroup = prev.ev.groupId && prev.ev.groupId === cur.ev.groupId;
+                        const la = locById.get(prev.ev.locId), lb = locById.get(cur.ev.locId);
+                        if (!sameGroup && cur.s < prev.e) {
+                            const msg = `Choque de horário: ${la ? la.name : 'local'} (${absToLabel(prev.s)}-${absToLabel(prev.e)}) e ${lb ? lb.name : 'local'} (${absToLabel(cur.s)}-${absToLabel(cur.e)})`;
+                            add(prev.ev, 'overlap', msg); add(cur.ev, 'overlap', msg);
+                        } else if (!sameGroup && la && lb && la.id !== lb.id && cur.s - prev.e < 24 * 60) {
+                            const t = travelBetween(locPoint(la), locPoint(lb));
+                            const gap = cur.s - prev.e;
+                            if (t && gap < t.min + settings.bufferMin) {
+                                const msg = `Sem tempo de deslocamento: ${fmtDuration(gap)} entre ${la.name} e ${lb.name}, mas o trajeto leva ~${fmtDuration(t.min)} (${fmtKm(t.km)}${t.source === 'estimativa' ? ', estimado' : ''}) + ${settings.bufferMin} min de folga`;
+                                add(prev.ev, 'travel', msg); add(cur.ev, 'travel', msg);
+                            }
+                        }
+                    }
+                    if (!prev || cur.e > prev.e) prev = cur;
+                }
+            });
+            return issues;
+        }
+
+        // Trechos de viagem estimados: base -> 1º local, entre locais diferentes, volta para a base
+        // (considera que volta para casa quando há mais de 8h livres entre um compromisso e outro)
+        const HOME_GAP_MIN = 8 * 60;
+        function buildLegs(list) {
+            const legs = [];
+            const base = basePoint();
+            const locById = new Map(locations.map(l => [l.id, l]));
+            const byProf = new Map();
+            list.forEach(ev => {
+                const iv = absInterval(ev);
+                const d0 = dayIndex(ev.year, ev.month, ev.date) * 1440;
+                const s = iv ? iv[0] : d0 + 8 * 60, e = iv ? iv[1] : s + Math.max(60, (ev.hours || 1) * 60);
+                if (!byProf.has(ev.profId)) byProf.set(ev.profId, []);
+                byProf.get(ev.profId).push({ ev, s, e, loc: locById.get(ev.locId) });
+            });
+            const pushLeg = (profId, from, to, abs) => {
+                const t = travelBetween(from, to);
+                if (t && t.km === 0) return;
+                legs.push({ profId, abs, from: from ? from.name : '?', to: to ? to.name : '?', km: t ? t.km : null, min: t ? t.min : null, source: t ? t.source : 'sem coordenadas' });
+            };
+            byProf.forEach((items, profId) => {
+                items.sort((a, b) => a.s - b.s);
+                let prev = null;
+                for (const cur of items) {
+                    const curPt = locPoint(cur.loc) || (cur.loc ? { name: cur.loc.name } : null);
+                    const prevPt = prev ? (locPoint(prev.loc) || (prev.loc ? { name: prev.loc.name } : null)) : null;
+                    const fix = p => (p && validCoord(p.lat, p.lng) ? p : null);
+                    if (!prev) { if (base) pushLeg(profId, base, fix(curPt) || curPt, cur.s); }
+                    else {
+                        const gap = cur.s - prev.e;
+                        const sameLoc = prev.loc && cur.loc && prev.loc.id === cur.loc.id;
+                        if (gap > HOME_GAP_MIN && base) {
+                            pushLeg(profId, fix(prevPt) || prevPt, base, prev.e);
+                            pushLeg(profId, base, fix(curPt) || curPt, cur.s);
+                        } else if (!sameLoc) pushLeg(profId, fix(prevPt) || prevPt, fix(curPt) || curPt, cur.s);
+                    }
+                    if (!prev || cur.e >= prev.e) prev = cur;
+                }
+                if (prev && base) pushLeg(profId, locPoint(prev.loc) || (prev.loc ? { name: prev.loc.name } : null), base, prev.e);
+            });
+            return legs.sort((a, b) => a.abs - b.abs);
+        }
+
+        function eventValue(ev) {
+            const loc = locations.find(l => l.id === ev.locId);
+            if (!loc) return 0;
+            if (ev.type === 'plantao') return (ev.hours || 0) * (loc.hourlyRate || 0);
+            if (ev.type === 'exame') return (ev.examsCount || 0) * (loc.examRate || 0);
+            return 0;
+        }
 
         // =========================================================================
         // CLIENTE SUPABASE & FALLBACK
@@ -629,7 +931,6 @@
             if ((url && !key) || (!url && key)) return alert('Preencha a URL e a chave, ou deixe ambos em branco para o modo local.');
             if (url && !/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(url)) return alert('URL inválida. Exemplo: https://xyzcompany.supabase.co');
             if (key && /service_role/.test(atobSafe(key.split('.')[1] || ''))) return alert('Esta é uma chave service_role (secreta). Nunca a use no navegador. Cole a chave "anon".');
-            // Encerra a sessão atual antes de trocar de projeto/modo
             if (supabaseClient) { try { await supabaseClient.auth.signOut(); } catch (e) { /* ignora */ } }
             authUser = null; storeRemove('pokulai_auth_user_visual');
             supabaseConfig = { url, key };
@@ -692,109 +993,163 @@
         }
 
         // =========================================================================
-        // MÓDULO DE RASTREAMENTO E APURAÇÃO DE PLANTÕES
+        // INSIGHTS, APURAÇÃO E RELATÓRIOS
         // =========================================================================
-        let currentAuditData = null;
+        let currentReport = null;
 
-        function auditableProfessionals() {
+        function scopeProfessionals() {
             if (authUser && authUser.role !== 'admin') return professionals.filter(p => p.id === authUser.profId);
             return professionals;
         }
+        function canSeeTeam() { return !authUser || authUser.role === 'admin'; }
 
-        function openShiftTrackerModal() {
-            const list = auditableProfessionals();
-            if (list.length === 0) return alert('Cadastre ao menos um profissional antes de apurar plantões.');
-            const preferred = list.some(p => p.id === currentViewProfId) ? currentViewProfId : list[0].id;
-            document.getElementById('ai-filter-prof').innerHTML = list.map(p => `<option value="${p.id}" ${p.id === preferred ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
-            document.getElementById('ai-filter-month').innerHTML = monthNames.map((m, idx) => `<option value="${idx + 1}" ${idx + 1 === viewingMonth ? 'selected' : ''}>${m}</option>`).join('');
-            document.getElementById('ai-filter-year').value = viewingYear;
-            document.getElementById('ai-shifts-modal').classList.remove('hidden');
-            runShiftAudit();
+        // Calcula tudo o que os relatórios e insights precisam para um profissional (ou equipe = 0) no mês
+        function computeReport(profId, month, year) {
+            const profIds = profId === 0 ? scopeProfessionals().map(p => p.id) : [profId];
+            const profById = new Map(professionals.map(p => [p.id, p]));
+            const locById = new Map(locations.map(l => [l.id, l]));
+            const list = events.filter(e => e.month === month && e.year === year && profIds.includes(e.profId))
+                .sort((a, b) => a.date - b.date || (eventInterval(a)?.[0] ?? 0) - (eventInterval(b)?.[0] ?? 0) || a.profId - b.profId);
+            // Inclui os dias vizinhos para detectar choques na virada do mês
+            const issues = analyzeSchedule(events.filter(e => profIds.includes(e.profId)));
+            const legs = buildLegs(list);
+
+            const totals = { plantaoHours: 0, plantaoKeys: new Set(), exams: 0, examEvents: 0, revPlantao: 0, revExames: 0, km: 0, driveMin: 0, unknownLegs: 0, clientes: 0, outros: 0 };
+            const byLoc = new Map(), byProf = new Map();
+            const warnings = [];
+            const missingRates = new Set(), missingCoords = new Set();
+            list.forEach(ev => {
+                const loc = locById.get(ev.locId) || { id: -1, name: 'Local removido', city: '' };
+                const value = eventValue(ev);
+                const key = ev.groupId || ev.id;
+                if (!byLoc.has(loc.id)) byLoc.set(loc.id, { loc, plantaoKeys: new Set(), hours: 0, exams: 0, value: 0, count: 0 });
+                if (!byProf.has(ev.profId)) byProf.set(ev.profId, { prof: profById.get(ev.profId), plantaoKeys: new Set(), hours: 0, exams: 0, value: 0, cities: new Set() });
+                const bl = byLoc.get(loc.id), bp = byProf.get(ev.profId);
+                bl.count++; bp.cities.add(loc.city || loc.name);
+                if (ev.type === 'plantao') {
+                    totals.plantaoHours += ev.hours; totals.plantaoKeys.add(key); totals.revPlantao += value;
+                    bl.hours += ev.hours; bl.plantaoKeys.add(key); bp.hours += ev.hours; bp.plantaoKeys.add(key);
+                    if (!ev.hours) warnings.push(`Plantão sem horas em ${fmtDate(ev)} (${loc.name})`);
+                    if (loc.id !== -1 && !loc.hourlyRate) missingRates.add(`${loc.name} (valor/hora)`);
+                } else if (ev.type === 'exame') {
+                    totals.exams += ev.examsCount; totals.examEvents++; totals.revExames += value;
+                    bl.exams += ev.examsCount; bp.exams += ev.examsCount;
+                    if (!ev.examsCount) warnings.push(`Exames sem quantidade em ${fmtDate(ev)} (${loc.name})`);
+                    if (loc.id !== -1 && !loc.examRate) missingRates.add(`${loc.name} (valor/exame)`);
+                } else if (ev.type === 'cliente') totals.clientes++;
+                else totals.outros++;
+                bl.value += value; bp.value += value;
+                if (loc.id !== -1 && !validCoord(loc.lat, loc.lng)) missingCoords.add(loc.name);
+            });
+            legs.forEach(l => { if (l.km === null) totals.unknownLegs++; else { totals.km += l.km; totals.driveMin += l.min; } });
+
+            const monthIssues = [];
+            list.forEach(ev => (issues.get(ev.id) || []).forEach(i => { if (!monthIssues.some(x => x.msg === i.msg)) monthIssues.push(i); }));
+
+            // Maior sequência de trabalho contínuo (plantão/exame com intervalos de até 1h)
+            const streaks = [];
+            profIds.forEach(pid => {
+                const ivs = list.filter(e => e.profId === pid && (e.type === 'plantao' || e.type === 'exame')).map(absInterval).filter(Boolean).sort((a, b) => a[0] - b[0]);
+                let cur = null;
+                ivs.forEach(iv => { if (cur && iv[0] - cur[1] <= 60) cur[1] = Math.max(cur[1], iv[1]); else { if (cur) streaks.push({ pid, s: cur[0], e: cur[1] }); cur = [...iv]; } });
+                if (cur) streaks.push({ pid, s: cur[0], e: cur[1] });
+            });
+            const longStreaks = streaks.filter(s => s.e - s.s > 24 * 60).sort((a, b) => (b.e - b.s) - (a.e - a.s));
+
+            const revenue = totals.revPlantao + totals.revExames;
+            const cost = totals.km * settings.costPerKm;
+            const cities = new Set([...byLoc.values()].map(b => b.loc.city || b.loc.name));
+
+            const insights = [];
+            const team = profId === 0;
+            insights.push({ tone: 'info', text: `${totals.plantaoKeys.size} plantão(ões) somando ${fmtHours(totals.plantaoHours)}h e ${totals.exams} exame(s) em ${totals.examEvents} atendimento(s), em ${cities.size} município(s) e ${byLoc.size} unidade(s).` });
+            if (revenue > 0) insights.push({ tone: 'info', text: `Faturamento estimado: ${fmtMoney(revenue)} (plantões ${fmtMoney(totals.revPlantao)} · exames ${fmtMoney(totals.revExames)}).` });
+            if (totals.km > 0) insights.push({ tone: 'info', text: `Deslocamento estimado: ${fmtKm(totals.km)} e ${fmtDuration(totals.driveMin)} ao volante${cost > 0 ? ` · custo aproximado ${fmtMoney(cost)}${revenue > 0 ? ` (resultado ${fmtMoney(revenue - cost)})` : ''}` : ''}.` });
+            if (revenue > 0 && totals.km > 0) {
+                const top = [...byLoc.values()].filter(b => b.value > 0).sort((a, b) => b.value - a.value)[0];
+                if (top) insights.push({ tone: 'info', text: `Unidade com maior faturamento: ${top.loc.name} (${fmtMoney(top.value)}).` });
+            }
+            const overlaps = monthIssues.filter(i => i.kind === 'overlap'), travels = monthIssues.filter(i => i.kind === 'travel');
+            if (overlaps.length) insights.push({ tone: 'error', text: `${overlaps.length} choque(s) de horário: ${overlaps.map(i => i.msg.replace(/^Choque de horário: /, '')).join(' | ')}` });
+            if (travels.length) insights.push({ tone: 'error', text: `${travels.length} choque(s) de deslocamento: ${travels.map(i => i.msg.replace(/^Sem tempo de deslocamento: /, '')).join(' | ')}` });
+            longStreaks.slice(0, 3).forEach(s => insights.push({ tone: 'warn', text: `${team ? (profById.get(s.pid)?.name || '') + ': ' : ''}${fmtHours((s.e - s.s) / 60)}h de trabalho seguido (${absToLabel(s.s)} a ${absToLabel(s.e)}). Atenção ao descanso.` }));
+            if (warnings.length) insights.push({ tone: 'warn', text: `${warnings.length} lançamento(s) incompleto(s): ${warnings.slice(0, 6).join('; ')}${warnings.length > 6 ? '…' : ''}` });
+            if (missingRates.size) insights.push({ tone: 'warn', text: `Valores não cadastrados (faturamento subestimado): ${[...missingRates].join(', ')}. Edite o local (ícone ⚙).` });
+            if (missingCoords.size) insights.push({ tone: 'warn', text: `Locais sem localização (sem cálculo de km): ${[...missingCoords].join(', ')}.` });
+            if (!basePoint()) insights.push({ tone: 'warn', text: 'Cidade base não localizada: cadastre-a em "Base, deslocamento e custos" para somar ida e volta.' });
+            if (totals.clientes || totals.outros) insights.push({ tone: 'info', text: `Também há ${totals.clientes} visita(s) a cliente e ${totals.outros} outro(s) compromisso(s), fora do faturamento.` });
+            if (!list.length) insights.splice(0, insights.length, { tone: 'info', text: 'Nenhum lançamento neste período.' });
+
+            return { profId, prof: profById.get(profId) || null, team, month, year, list, legs, totals, byLoc, byProf, revenue, cost, cities, insights, issues };
         }
 
-        function closeShiftTrackerModal() { document.getElementById('ai-shifts-modal').classList.add('hidden'); }
+        function openInsightsModal() {
+            const list = scopeProfessionals();
+            if (list.length === 0) return alert('Cadastre ao menos um profissional.');
+            const opts = [];
+            if (canSeeTeam() && list.length > 1) opts.push(`<option value="0" ${currentViewProfId === 0 ? 'selected' : ''}>Toda a equipe</option>`);
+            const preferred = list.some(p => p.id === currentViewProfId) ? currentViewProfId : (opts.length ? 0 : list[0].id);
+            list.forEach(p => opts.push(`<option value="${p.id}" ${p.id === preferred ? 'selected' : ''}>${esc(p.name)}</option>`));
+            document.getElementById('ai-filter-prof').innerHTML = opts.join('');
+            document.getElementById('ai-filter-month').innerHTML = monthNames.map((m, idx) => `<option value="${idx + 1}" ${idx + 1 === viewingMonth ? 'selected' : ''}>${m}</option>`).join('');
+            document.getElementById('ai-filter-year').value = viewingYear;
+            document.getElementById('ai-report-city').value = settings.reportCity || settings.baseName || '';
+            document.getElementById('ai-shifts-modal').classList.remove('hidden');
+            runInsights();
+        }
+        function closeInsightsModal() { document.getElementById('ai-shifts-modal').classList.add('hidden'); }
+        // Compatibilidade com nomes antigos
+        const openShiftTrackerModal = openInsightsModal, closeShiftTrackerModal = closeInsightsModal;
 
-        function runShiftAudit() {
+        function runInsights() {
             const profId = parseInt(document.getElementById('ai-filter-prof').value, 10);
             const month = parseInt(document.getElementById('ai-filter-month').value, 10);
             const year = parseInt(document.getElementById('ai-filter-year').value, 10);
-            const prof = professionals.find(p => p.id === profId);
-            const breakdownTable = document.getElementById('ai-breakdown-table');
-            const warningsEl = document.getElementById('ai-audit-warnings');
+            if (!Number.isFinite(profId) || !(year >= 2000 && year <= 2100)) { currentReport = null; return; }
+            const r = computeReport(profId, month, year);
+            currentReport = r;
+            const t = r.totals;
+            const card = (cls, label, value, sub) => `<div class="${cls} p-3 rounded-lg border"><span class="text-[10px] uppercase font-bold block opacity-80">${label}</span><span class="text-xl md:text-2xl font-extrabold block">${value}</span><span class="text-[10px] block opacity-70">${sub}</span></div>`;
+            document.getElementById('ai-cards').innerHTML = [
+                card('bg-teal-50 dark:bg-teal-900/30 border-teal-200 dark:border-teal-800 text-teal-900 dark:text-teal-100', 'Horas de plantão', `${fmtHours(t.plantaoHours)}h`, `${t.plantaoKeys.size} plantão(ões)`),
+                card('bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-100', 'Exames', t.exams, `${t.examEvents} atendimento(s)`),
+                card('bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100', 'Faturamento estimado', fmtMoney(r.revenue), r.cost > 0 ? `custo km ${fmtMoney(r.cost)}` : 'plantões + exames'),
+                card('bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100', 'Deslocamento', fmtKm(t.km), `${fmtDuration(t.driveMin)} · ${r.cities.size} município(s)`)
+            ].join('');
+            const toneIcon = { info: 'fa-circle-info text-sky-500', warn: 'fa-triangle-exclamation text-amber-500', error: 'fa-circle-xmark text-red-500' };
+            document.getElementById('ai-insights').innerHTML = r.insights.map(i => `<li class="flex items-start"><i class="fas ${toneIcon[i.tone]} mt-0.5 mr-2"></i><span>${esc(i.text)}</span></li>`).join('');
 
-            if (!prof || !(year >= 2000 && year <= 2100)) {
-                currentAuditData = null;
-                ['ai-total-hours', 'ai-total-shifts', 'ai-total-locations'].forEach(id => document.getElementById(id).innerText = '—');
-                breakdownTable.innerHTML = `<div class="p-6 text-center text-gray-400 italic">Selecione um profissional e um ano válido.</div>`;
-                warningsEl.classList.add('hidden');
-                return;
+            if (!r.byLoc.size) document.getElementById('ai-breakdown-table').innerHTML = `<div class="p-6 text-center text-gray-400 italic">Nenhum lançamento no período.</div>`;
+            else {
+                let html = `<table class="w-full text-left text-xs border-collapse"><thead class="bg-gray-100 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300 font-bold uppercase"><tr><th class="p-2">Local</th><th class="p-2">Cidade</th><th class="p-2 text-center">Plantões</th><th class="p-2 text-right">Horas</th><th class="p-2 text-right">Exames</th><th class="p-2 text-right">Valor</th></tr></thead><tbody class="divide-y divide-gray-200 dark:divide-gray-700">`;
+                r.byLoc.forEach(b => { html += `<tr><td class="p-2 font-semibold">${esc(b.loc.name)}</td><td class="p-2">${esc(b.loc.city || '-')}</td><td class="p-2 text-center">${b.plantaoKeys.size || '-'}</td><td class="p-2 text-right">${b.hours ? fmtHours(b.hours) + 'h' : '-'}</td><td class="p-2 text-right">${b.exams || '-'}</td><td class="p-2 text-right font-bold">${b.value ? fmtMoney(b.value) : '-'}</td></tr>`; });
+                html += `</tbody></table>`;
+                document.getElementById('ai-breakdown-table').innerHTML = html;
             }
-
-            // Apenas lançamentos do tipo 'plantao' (exames e outros compromissos são descartados)
-            const shiftEvents = events
-                .filter(e => e.profId === profId && e.month === month && e.year === year && e.type === 'plantao')
-                .sort((a, b) => a.date - b.date || (eventInterval(a)?.[0] ?? 0) - (eventInterval(b)?.[0] ?? 0));
-
-            // Agregação por local (chave = id, para não fundir locais homônimos)
-            const breakdown = new Map();
-            let grandTotalHours = 0;
-            const shiftKeys = new Set();
-            const zeroHour = [];
-
-            shiftEvents.forEach(ev => {
-                const loc = locations.find(l => l.id === ev.locId) || { id: -1, name: 'Local removido' };
-                if (!breakdown.has(loc.id)) breakdown.set(loc.id, { locationName: loc.name, totalHours: 0, shiftKeys: new Set(), entries: [] });
-                const item = breakdown.get(loc.id);
-                const h = parseFloat(ev.hours) || 0;
-                const key = ev.groupId || ev.id;
-                item.totalHours += h;
-                item.shiftKeys.add(key);
-                item.entries.push({ day: pad2(ev.date), hours: h });
-                shiftKeys.add(key);
-                grandTotalHours += h;
-                if (h === 0) zeroHour.push(`${fmtDate(ev)} (${loc.name})`);
-            });
-            grandTotalHours = Math.round(grandTotalHours * 100) / 100;
-
-            currentAuditData = { prof, month, year, grandTotalHours, totalShifts: shiftKeys.size, totalLocations: breakdown.size, shiftEvents };
-
-            document.getElementById('ai-total-hours').innerText = `${fmtHours(grandTotalHours)}h`;
-            document.getElementById('ai-total-shifts').innerText = shiftKeys.size;
-            document.getElementById('ai-total-locations').innerText = breakdown.size;
-
-            if (zeroHour.length) {
-                warningsEl.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i> ${zeroHour.length} plantão(ões) sem horas lançadas — o total pode estar subestimado: ${esc(zeroHour.join('; '))}`;
-                warningsEl.classList.remove('hidden');
-            } else warningsEl.classList.add('hidden');
-
-            if (breakdown.size === 0) {
-                breakdownTable.innerHTML = `<div class="p-6 text-center text-gray-400 italic">Nenhum plantão localizado para este profissional no período selecionado.</div>`;
-                return;
+            const teamBlock = document.getElementById('ai-team-block');
+            teamBlock.classList.toggle('hidden', !r.team);
+            if (r.team) {
+                let html = `<table class="w-full text-left text-xs border-collapse"><thead class="bg-gray-100 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300 font-bold uppercase"><tr><th class="p-2">Profissional</th><th class="p-2">Municípios</th><th class="p-2 text-center">Plantões</th><th class="p-2 text-right">Horas</th><th class="p-2 text-right">Exames</th><th class="p-2 text-right">Valor</th></tr></thead><tbody class="divide-y divide-gray-200 dark:divide-gray-700">`;
+                r.byProf.forEach(b => { html += `<tr><td class="p-2 font-semibold">${esc(b.prof ? b.prof.name : 'Removido')}</td><td class="p-2">${esc([...b.cities].join(', '))}</td><td class="p-2 text-center">${b.plantaoKeys.size}</td><td class="p-2 text-right">${fmtHours(b.hours)}h</td><td class="p-2 text-right">${b.exams}</td><td class="p-2 text-right font-bold">${fmtMoney(b.value)}</td></tr>`; });
+                html += `</tbody></table>`;
+                document.getElementById('ai-team-table').innerHTML = html;
             }
+        }
+        const runShiftAudit = runInsights;
 
-            let tableHtml = `
-                <table class="w-full text-left text-xs border-collapse">
-                    <thead class="bg-gray-100 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300 font-bold uppercase">
-                        <tr>
-                            <th class="p-3">Hospital / Estabelecimento</th>
-                            <th class="p-3 text-center">Nº Plantões</th>
-                            <th class="p-3 text-right">Carga Horária</th>
-                            <th class="p-3 text-center">Datas / Escalas</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">`;
-            breakdown.forEach(item => {
-                const datesSummary = item.entries.map(e => `${e.day} (${fmtHours(e.hours)}h)`).join(', ');
-                tableHtml += `
-                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                        <td class="p-3 font-semibold text-gray-800 dark:text-gray-200"><i class="far fa-hospital mr-2 text-teal-600"></i>${esc(item.locationName)}</td>
-                        <td class="p-3 text-center">${item.shiftKeys.size}</td>
-                        <td class="p-3 text-right font-bold text-teal-700 dark:text-teal-400">${fmtHours(item.totalHours)}h</td>
-                        <td class="p-3 text-center text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-xs" title="${esc(datesSummary)}">Dias: ${esc(datesSummary)}</td>
-                    </tr>`;
-            });
-            tableHtml += `</tbody></table>`;
-            breakdownTable.innerHTML = tableHtml;
+        function reportCityValue() {
+            const el = document.getElementById('ai-report-city');
+            const v = (el && el.value.trim()) || settings.reportCity || settings.baseName || '';
+            if (el && v !== settings.reportCity) { settings.reportCity = v; saveData(); }
+            return v;
+        }
+
+        function exportInsights(kind) {
+            if (!currentReport) return alert('Selecione um período válido.');
+            if (!currentReport.list.length) return alert('Não há lançamentos no período selecionado.');
+            if (kind === 'pdf') exportReportPDF(currentReport);
+            else if (kind === 'xlsx') exportReportExcel(currentReport);
+            else exportLegsCSV(currentReport);
         }
 
         function getJsPDF() {
@@ -804,23 +1159,160 @@
             return doc;
         }
 
+        function reportTitle(r) { return r.team ? 'Equipe' : (r.prof ? r.prof.name : 'Profissional'); }
+        function reportFileName(r, ext, prefix = 'Relatorio') { return `${prefix}_${safeFileName(reportTitle(r))}_${pad2(r.month)}_${r.year}.${ext}`; }
+
+        function eventRows(r) {
+            return r.list.map(e => {
+                const loc = locations.find(l => l.id === e.locId) || { name: 'Local removido', city: '' };
+                const prof = professionals.find(p => p.id === e.profId);
+                return { e, loc, prof, value: eventValue(e), issues: r.issues.get(e.id) || [] };
+            });
+        }
+
+        // Relatório gerencial completo (todas as categorias, valores e deslocamentos)
+        function exportReportPDF(r) {
+            const doc = getJsPDF(); if (!doc) return;
+            const teal = [15, 118, 110], navy = [30, 58, 138];
+            const t = r.totals;
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...navy);
+            doc.text(pdfSafe(`RELATÓRIO MENSAL - ${monthNames[r.month - 1].toUpperCase()} DE ${r.year}`), 105, 18, { align: 'center' });
+            doc.setFontSize(10); doc.setTextColor(...teal);
+            doc.text(pdfSafe(r.team ? 'Consolidado da equipe' : `${r.prof.name}${r.prof.crm ? ' - CRM ' + r.prof.crm : ''}`), 105, 24, { align: 'center' });
+            doc.setDrawColor(200, 200, 200); doc.line(14, 28, 196, 28);
+
+            doc.autoTable({
+                startY: 32, theme: 'plain', styles: { fontSize: 9, cellPadding: 1.5 }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } },
+                body: [
+                    ['Plantões', `${t.plantaoKeys.size} plantão(ões) - ${fmtHours(t.plantaoHours)} h`],
+                    ['Exames', `${t.exams} exame(s) em ${t.examEvents} atendimento(s)`],
+                    ['Faturamento estimado', pdfSafe(`${fmtMoney(r.revenue)} (plantões ${fmtMoney(t.revPlantao)} / exames ${fmtMoney(t.revExames)})`)],
+                    ['Deslocamento estimado', pdfSafe(`${fmtKm(t.km)} - ${fmtDuration(t.driveMin)} ao volante${r.cost > 0 ? ' - custo ' + fmtMoney(r.cost) : ''}`)],
+                    ['Municípios / unidades', pdfSafe(`${[...r.cities].join(', ')} (${r.byLoc.size} unidade(s))`)]
+                ]
+            });
+
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...navy);
+            let y = doc.lastAutoTable.finalY + 6;
+            doc.text('Insights e alertas', 14, y);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(60, 60, 60);
+            y += 5;
+            r.insights.forEach(i => {
+                const lines = doc.splitTextToSize(pdfSafe('- ' + i.text.replace(/⚙/g, '')), 182);
+                if (y + lines.length * 3.8 > 275) { doc.addPage(); y = 20; }
+                doc.text(lines, 14, y); y += lines.length * 3.8 + 1;
+            });
+
+            doc.autoTable({
+                startY: y + 3, margin: { bottom: 18 },
+                head: [['Local', 'Cidade', 'Plantões', 'Horas', 'Exames', 'Valor']],
+                body: [...r.byLoc.values()].map(b => [pdfSafe(b.loc.name), pdfSafe(b.loc.city || '-'), b.plantaoKeys.size || '-', b.hours ? fmtHours(b.hours) : '-', b.exams || '-', pdfSafe(b.value ? fmtMoney(b.value) : '-')]),
+                theme: 'grid', headStyles: { fillColor: teal, textColor: 255, fontStyle: 'bold' }, styles: { fontSize: 8.5, cellPadding: 2 }
+            });
+            if (r.team) {
+                doc.autoTable({
+                    startY: doc.lastAutoTable.finalY + 6, margin: { bottom: 18 },
+                    head: [['Profissional', 'Municípios', 'Plantões', 'Horas', 'Exames', 'Valor']],
+                    body: [...r.byProf.values()].map(b => [pdfSafe(b.prof ? b.prof.name : 'Removido'), pdfSafe([...b.cities].join(', ')), b.plantaoKeys.size, fmtHours(b.hours), b.exams, pdfSafe(fmtMoney(b.value))]),
+                    theme: 'grid', headStyles: { fillColor: navy, textColor: 255, fontStyle: 'bold' }, styles: { fontSize: 8.5, cellPadding: 2 }
+                });
+            }
+            const head = ['Data'].concat(r.team ? ['Profissional'] : [], ['Local', 'Tipo', 'Horário', 'Horas', 'Exames', 'Valor']);
+            doc.autoTable({
+                startY: doc.lastAutoTable.finalY + 6, margin: { bottom: 18 },
+                head: [head],
+                body: eventRows(r).map(x => [fmtDate(x.e)].concat(r.team ? [pdfSafe(x.prof ? shortName(x.prof.name) : '-')] : [], [pdfSafe(x.loc.name), TYPES[x.e.type].label, pdfSafe(x.e.text + (x.issues.length ? ' (!)' : '')), x.e.type === 'plantao' ? fmtHours(x.e.hours) : '-', x.e.type === 'exame' ? x.e.examsCount : '-', pdfSafe(x.value ? fmtMoney(x.value) : '-')])),
+                theme: 'grid', headStyles: { fillColor: teal, textColor: 255, fontStyle: 'bold' }, styles: { fontSize: 7.5, cellPadding: 1.8 }
+            });
+            if (r.legs.length) {
+                doc.autoTable({
+                    startY: doc.lastAutoTable.finalY + 6, margin: { bottom: 18 },
+                    head: [['Data'].concat(r.team ? ['Profissional'] : [], ['Origem', 'Destino', 'Km', 'Tempo', 'Fonte'])],
+                    body: r.legs.map(l => [absToLabel(l.abs).split(' ')[0]].concat(r.team ? [pdfSafe(shortName(professionals.find(p => p.id === l.profId)?.name || '-'))] : [], [pdfSafe(l.from), pdfSafe(l.to), l.km === null ? '-' : fmtHours(l.km), l.min === null ? '-' : fmtDuration(l.min), l.source])),
+                    theme: 'grid', headStyles: { fillColor: [80, 80, 80], textColor: 255, fontStyle: 'bold' }, styles: { fontSize: 7.5, cellPadding: 1.8 }
+                });
+            }
+            const city = reportCityValue(), issueDate = new Date().toLocaleDateString('pt-BR');
+            const pages = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pages; i++) {
+                doc.setPage(i); doc.setDrawColor(220, 220, 220); doc.line(14, 284, 196, 284);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
+                doc.text(pdfSafe(`PokulAI - Emissão: ${issueDate}${city ? ' - ' + city : ''} - Valores e distâncias são estimativas`), 14, 289);
+                doc.text(`Página ${i} de ${pages}`, 196, 289, { align: 'right' });
+            }
+            doc.save(reportFileName(r, 'pdf'));
+        }
+
+        function exportReportExcel(r) {
+            if (!window.XLSX) return alert('Biblioteca de Excel não carregada (verifique a conexão).');
+            const t = r.totals;
+            const wb = XLSX.utils.book_new();
+            const resumo = [
+                { Item: 'Período', Valor: `${monthNames[r.month - 1]}/${r.year}` },
+                { Item: 'Profissional', Valor: reportTitle(r) },
+                { Item: 'Plantões (qtd)', Valor: t.plantaoKeys.size },
+                { Item: 'Horas de plantão', Valor: Math.round(t.plantaoHours * 100) / 100 },
+                { Item: 'Exames (qtd)', Valor: t.exams },
+                { Item: 'Faturamento plantões (R$)', Valor: Math.round(t.revPlantao * 100) / 100 },
+                { Item: 'Faturamento exames (R$)', Valor: Math.round(t.revExames * 100) / 100 },
+                { Item: 'Faturamento total (R$)', Valor: Math.round(r.revenue * 100) / 100 },
+                { Item: 'Km estimados', Valor: Math.round(t.km) },
+                { Item: 'Horas ao volante', Valor: Math.round(t.driveMin / 60 * 10) / 10 },
+                { Item: 'Custo km estimado (R$)', Valor: Math.round(r.cost * 100) / 100 },
+                { Item: 'Municípios', Valor: [...r.cities].join(', ') }
+            ].concat(r.insights.map((i, n) => ({ Item: `Insight ${n + 1}`, Valor: i.text })));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumo), 'Resumo');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(eventRows(r).map(x => {
+                const row = { Data: fmtDate(x.e) };
+                if (r.team) row.Profissional = x.prof ? x.prof.name : '';
+                return Object.assign(row, { Local: x.loc.name, Cidade: x.loc.city || '', Tipo: TYPES[x.e.type].label, Horario: x.e.text, Horas: x.e.type === 'plantao' ? x.e.hours : 0, Exames: x.e.type === 'exame' ? x.e.examsCount : 0, 'Valor (R$)': Math.round(x.value * 100) / 100, Alertas: x.issues.map(i => i.msg).join(' | ') });
+            })), 'Lançamentos');
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([...r.byLoc.values()].map(b => ({ Local: b.loc.name, Cidade: b.loc.city || '', Plantoes: b.plantaoKeys.size, Horas: Math.round(b.hours * 100) / 100, Exames: b.exams, 'Valor (R$)': Math.round(b.value * 100) / 100 }))), 'Por local');
+            if (r.legs.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(legRows(r)), 'Deslocamentos');
+            XLSX.writeFile(wb, reportFileName(r, 'xlsx'));
+        }
+
+        function legRows(r) {
+            return r.legs.map(l => {
+                const row = { Data: absToLabel(l.abs).split(' ')[0] + '/' + r.year, Hora: absToLabel(l.abs).split(' ')[1] };
+                if (r.team) row.Profissional = professionals.find(p => p.id === l.profId)?.name || '';
+                return Object.assign(row, { Origem: l.from, Destino: l.to, Km: l.km === null ? '' : Math.round(l.km * 10) / 10, Minutos: l.min === null ? '' : Math.round(l.min), Fonte: l.source });
+            });
+        }
+
+        // CSV (separador ;) para importar no app de custo operacional do carro
+        function exportLegsCSV(r) {
+            const rows = legRows(r);
+            if (!rows.length) return alert('Nenhum deslocamento calculado (verifique a cidade base e as coordenadas dos locais).');
+            const cols = Object.keys(rows[0]);
+            const cell = v => { const s = String(v ?? '').replace(/"/g, '""'); return /[;"\n]/.test(s) ? `"${s}"` : s; };
+            const csv = [cols.join(';')].concat(rows.map(row => cols.map(c => cell(typeof row[c] === 'number' ? String(row[c]).replace('.', ',') : row[c])).join(';'))).join('\r\n');
+            downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), reportFileName(r, 'csv', 'Deslocamentos'));
+        }
+
+        function downloadBlob(blob, name) {
+            const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = name;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
         // =========================================================================
-        // RELATÓRIO DE APURAÇÃO EM PDF (autodeclaração para conferência da contratante)
+        // DECLARAÇÃO DE PLANTÕES EM PDF (autodeclaração para conferência da contratante)
         // =========================================================================
         function generateStructuredShiftReportPDF() {
-            if (!currentAuditData || currentAuditData.totalShifts === 0) {
-                alert("Nenhum plantão localizado para emissão do relatório.");
-                return;
-            }
+            if (!currentReport) return alert('Selecione um período válido.');
+            if (currentReport.team) return alert('A declaração de plantões é individual: selecione um profissional.');
+            const shiftEvents = currentReport.list.filter(e => e.type === 'plantao');
+            if (!shiftEvents.length) return alert("Nenhum plantão localizado para emissão da declaração.");
             const doc = getJsPDF(); if (!doc) return;
-            const { prof, month, year, grandTotalHours, shiftEvents } = currentAuditData;
-            const city = document.getElementById('ai-report-city').value.trim() || 'Ibirubá - RS';
+            const { prof, month, year } = currentReport;
+            const grandTotalHours = Math.round(shiftEvents.reduce((s, e) => s + e.hours, 0) * 100) / 100;
+            const city = reportCityValue();
             const issueDate = new Date().toLocaleDateString('pt-BR');
 
             const primaryColor = [15, 118, 110]; // #0F766E Teal
             const navyColor = [30, 58, 138];    // #1E3A8A Dark Blue
 
-            // 1. TÍTULO CENTRALIZADO
             doc.setFont("helvetica", "bold");
             doc.setFontSize(15);
             doc.setTextColor(navyColor[0], navyColor[1], navyColor[2]);
@@ -834,13 +1326,12 @@
             doc.setLineWidth(0.5);
             doc.line(14, 30, 196, 30);
 
-            // 2. IDENTIFICAÇÃO
             doc.setFont("helvetica", "bold");
             doc.setFontSize(10);
             doc.setTextColor(40, 40, 40);
-            doc.text(`Profissional Realizante: ${prof.name}`, 14, 38);
+            doc.text(pdfSafe(`Profissional Realizante: ${prof.name}`), 14, 38);
             doc.setFont("helvetica", "normal");
-            doc.text(`CRM: ${prof.crm || 'Não informado'}  |  Especialidade / Função: ${prof.spec || 'Não informada'}`, 14, 43);
+            doc.text(pdfSafe(`CRM: ${prof.crm || 'Não informado'}  |  Especialidade / Função: ${prof.spec || 'Não informada'}`), 14, 43);
             doc.text(`Período de Apuração: ${monthNames[month - 1]} de ${year}`, 14, 48);
 
             // Texto declaratório: o sistema não pode afirmar conferência que não ocorreu
@@ -851,10 +1342,9 @@
             doc.text(lines, 14, 55, { align: "justify", maxWidth: 182 });
             const tableStartY = 55 + lines.length * 4.2 + 5;
 
-            // 3. TABELA DE PLANTÕES (AutoTable)
             const tableRows = shiftEvents.map(e => {
                 const loc = locations.find(l => l.id === e.locId) || { name: 'Local removido' };
-                return [fmtDate(e), loc.name, e.text, `${fmtHours(e.hours)} h`];
+                return [fmtDate(e), pdfSafe(loc.name), pdfSafe(e.text), `${fmtHours(e.hours)} h`];
             });
 
             doc.autoTable({
@@ -879,15 +1369,14 @@
             let finalY = doc.lastAutoTable.finalY + 15;
             if (finalY > 235) { doc.addPage(); finalY = 30; }
 
-            // 4. BLOCO DE ASSINATURAS DO PROFISSIONAL E DA CONTRATANTE
             doc.setFont("helvetica", "normal");
             doc.setFontSize(9);
             doc.setTextColor(50, 50, 50);
             doc.setDrawColor(120, 120, 120);
             doc.line(20, finalY + 15, 90, finalY + 15);
-            doc.text(doc.splitTextToSize(prof.name, 70)[0], 55, finalY + 20, { align: "center" });
+            doc.text(pdfSafe(doc.splitTextToSize(prof.name, 70)[0]), 55, finalY + 20, { align: "center" });
             doc.setFontSize(8);
-            doc.text(`Profissional Realizante${prof.crm ? ' - CRM ' + prof.crm : ''}`, 55, finalY + 24, { align: "center" });
+            doc.text(pdfSafe(`Profissional Realizante${prof.crm ? ' - CRM ' + prof.crm : ''}`), 55, finalY + 24, { align: "center" });
 
             doc.line(120, finalY + 15, 190, finalY + 15);
             doc.setFontSize(9);
@@ -895,7 +1384,6 @@
             doc.setFontSize(8);
             doc.text("Carimbo e assinatura da contratante", 155, finalY + 24, { align: "center" });
 
-            // 5. RODAPÉ EM TODAS AS PÁGINAS
             const pageCount = doc.internal.getNumberOfPages();
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
@@ -904,7 +1392,7 @@
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(8);
                 doc.setTextColor(120, 120, 120);
-                doc.text(doc.splitTextToSize(`Profissional: ${prof.name} | Emissão: ${issueDate} | Local: ${city}`, 160)[0], 14, 287);
+                doc.text(pdfSafe(doc.splitTextToSize(`Profissional: ${prof.name} | Emissão: ${issueDate}${city ? ' | Local: ' + city : ''}`, 160)[0]), 14, 287);
                 doc.text(`Página ${i} de ${pageCount}`, 196, 287, { align: "right" });
             }
 
@@ -921,7 +1409,7 @@
             const btn = document.getElementById('btn-login');
 
             if (supabaseClient) {
-                // Com Supabase configurado, o login local simulado fica DESATIVADO (antes era um bypass)
+                // Com Supabase configurado, o login local simulado fica DESATIVADO
                 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user) || !pass) return alert('Informe e-mail e senha válidos.');
                 btn.disabled = true;
                 try {
@@ -1022,7 +1510,6 @@
                 return;
             }
             try {
-                // Remove cadastros TOTP pendentes (não verificados) para evitar fatores órfãos
                 const { data: list } = await supabaseClient.auth.mfa.listFactors();
                 if ((list?.totp || []).some(f => f.status === 'verified')) { alert('O MFA já está ativo nesta conta.'); return; }
                 for (const f of (list?.all || [])) {
@@ -1074,7 +1561,6 @@
                     adminTeamModule.classList.add('hidden');
                     adminTeamModule.classList.remove('flex');
                     if (!professionals.some(p => p.id === authUser.profId)) {
-                        // Profissional vinculado foi removido: recria o vínculo pelo nome
                         authUser.profId = linkProfessional({ name: authUser.name, email: authUser.email }).id;
                         if (authUser.source === 'local') storeJSON('pokulai_auth_user_visual', authUser);
                     }
@@ -1096,11 +1582,11 @@
         const MONTHS = { janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12 };
         const MONTH_RE = '(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)';
         // O reconhecimento de voz costuma devolver números por extenso ("dia cinco", "das sete às dezenove")
-        const NUM_WORDS = { zero: 0, um: 1, uma: 1, primeiro: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13, catorze: 14, quatorze: 14, quinze: 15, dezesseis: 16, dezasseis: 16, dezessete: 17, dezassete: 17, dezoito: 18, dezenove: 19, dezanove: 19, vinte: 20, trinta: 30 };
+        const NUM_WORDS = { zero: 0, um: 1, uma: 1, primeiro: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13, catorze: 14, quatorze: 14, quinze: 15, dezesseis: 16, dezasseis: 16, dezessete: 17, dezassete: 17, dezoito: 18, dezenove: 19, dezanove: 19, vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50 };
 
         function wordsToDigits(t) {
             t = t.replace(/\bmeia[- ]noite\b/g, '0h').replace(/\bmeio[- ]dia\b/g, '12h');
-            t = t.replace(/\b(vinte|trinta) e (um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove)\b/g, (_, a, b) => String(NUM_WORDS[a] + NUM_WORDS[b]));
+            t = t.replace(/\b(vinte|trinta|quarenta|cinquenta) e (um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove)\b/g, (_, a, b) => String(NUM_WORDS[a] + NUM_WORDS[b]));
             return t.replace(/\b[a-z]+\b/g, w => (Object.prototype.hasOwnProperty.call(NUM_WORDS, w) ? String(NUM_WORDS[w]) : w));
         }
 
@@ -1115,8 +1601,17 @@
         }
 
         // Interpreta faixas de horário: "das 19 às 7", "17:30 às 07:00", "19h30 até 7h", "das sete da noite às sete",
-        // "início às 19h com duração de 12 horas". Retorna { startMin, durationMin } ou null.
+        // "início às 19h com duração de 12 horas", "plantão de 24 horas a partir das 7". Retorna { startMin, durationMin } ou null.
+        const timeRangeMemo = new Map();
         function parseTimeRange(rawText) {
+            const key = String(rawText || '');
+            if (timeRangeMemo.has(key)) return timeRangeMemo.get(key);
+            const result = parseTimeRangeUncached(key);
+            if (timeRangeMemo.size > 2000) timeRangeMemo.clear();
+            timeRangeMemo.set(key, result);
+            return result;
+        }
+        function parseTimeRangeUncached(rawText) {
             let t = wordsToDigits(norm(rawText));
             t = t.replace(/\b(\d{1,2})\s*h?\s+e\s+meia\b/g, '$1:30');
             const dur = t.match(new RegExp(String.raw`(?:inicio|inicia|comeca|comecando|entrada)(?:\s+(?:as|a))?\s*` + TIME_TOKEN + String.raw`.*?duracao(?:\s+de)?\s*(\d{1,2}(?:[.,]\d+)?)\s*(?:horas|h)`));
@@ -1125,19 +1620,30 @@
                 const d = Math.round(parseFloat(dur[4].replace(',', '.')) * 60);
                 if (s !== null && d > 0 && d <= 48 * 60) return { startMin: s % 1440, durationMin: d };
             }
-            // 1) com prefixo "das/de/da": "das 19 as 7"
-            // 2) sem prefixo, exigindo marcador de hora no primeiro horário: "17:30 as 07:00", "19h - 7h"
             const sep = String.raw`\s*(?:as|ate|a|-)\s*`;
             const range = t.match(new RegExp(String.raw`(?:^|[\s(,])(?:das|de|da)\s+` + TIME_TOKEN + sep + TIME_TOKEN))
                 || t.match(new RegExp(String.raw`(?:^|[\s(,])(\d{1,2})(?:\s*(?:h|:)\s*(\d{2})?)(?:\s+(?:da|de)\s+(manha|tarde|noite|madrugada))?` + sep + TIME_TOKEN));
-            if (!range) return null;
-            let s = toMinutes(range[1], range[2], range[3]);
-            let e = toMinutes(range[4], range[5], range[6]);
-            if (s === null || e === null) return null;
-            if (s === 1440) s = 0;
-            const durationMin = e > s ? e - s : (e === s ? 1440 : e + 1440 - s); // igual = 24h; menor = vira a noite
-            return { startMin: s, durationMin };
+            if (range) {
+                let s = toMinutes(range[1], range[2], range[3]);
+                const e = toMinutes(range[4], range[5], range[6]);
+                if (s !== null && e !== null) {
+                    if (s === 1440) s = 0;
+                    const durationMin = e > s ? e - s : (e === s ? 1440 : e + 1440 - s); // igual = 24h; menor = vira a noite
+                    return { startMin: s, durationMin };
+                }
+            }
+            // "plantão de 24 horas a partir das 7" / "12 horas começando às 19h"
+            const hrs = t.match(/\b(?:de|com)\s+(\d{1,2})\s*(?:h|horas)\b/);
+            const start = t.match(new RegExp(String.raw`\b(?:a partir das?|a partir de|inicio as|inicia as|comeca as|comecando as|entrada as|entrando as|chegando as)\s*` + TIME_TOKEN));
+            if (hrs && start) {
+                const s = toMinutes(start[1], start[2], start[3]);
+                const d = parseInt(hrs[1], 10) * 60;
+                if (s !== null && d > 0 && d <= 48 * 60) return { startMin: s % 1440, durationMin: d };
+            }
+            return null;
         }
+        // Só a duração ("plantão de 24 horas" sem início): retorna horas
+        function parseDurationOnly(t) { const m = t.match(/\b(?:de|com)\s+(\d{1,2})\s*(?:h|horas)\b/); return m ? Math.min(24, parseInt(m[1], 10)) : null; }
 
         // Divide um plantão nas viradas de meia-noite (contabilização correta por dia e por mês)
         function splitByMidnight(startMin, durationMin) {
@@ -1155,19 +1661,6 @@
             if (Number.isFinite(ev.startMin) && Number.isFinite(ev.endMin)) return [ev.startMin, ev.endMin];
             const r = parseTimeRange(ev.text || '');
             return r ? [r.startMin, r.startMin + r.durationMin] : null;
-        }
-
-        // Conflitos do mesmo profissional no mesmo dia (inclui plantão da véspera que atravessa a meia-noite)
-        function findConflicts(profId, year, month, day, s, e) {
-            const prev = new Date(year, month - 1, day - 1);
-            return events.filter(ev => {
-                if (ev.profId !== profId) return false;
-                const iv = eventInterval(ev);
-                if (!iv) return false;
-                if (ev.year === year && ev.month === month && ev.date === day) return iv[0] < e && s < iv[1];
-                if (ev.year === prev.getFullYear() && ev.month === prev.getMonth() + 1 && ev.date === prev.getDate() && iv[1] > 1440) return s < iv[1] - 1440;
-                return false;
-            });
         }
 
         function parseDateFromText(t) {
@@ -1188,9 +1681,16 @@
                 if (!day) {
                     const rel = /\bdepois de amanha\b/.test(t) ? 2 : /\bamanha\b/.test(t) ? 1 : /\bhoje\b/.test(t) ? 0 : null;
                     if (rel !== null) { const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + rel); return { day: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear() }; }
+                    const wd = t.match(/\b(domingo|segunda|terca|quarta|quinta|sexta|sabado)\b/);
+                    if (wd) {
+                        const target = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'].indexOf(wd[1]);
+                        const diff = ((target - today.getDay()) + 7) % 7 || 7; // próxima ocorrência
+                        const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diff);
+                        return { day: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear() };
+                    }
                 }
             }
-            if (!day) return { error: 'Não identifiquei o dia (ex.: "dia 5", "5/10", "amanhã").' };
+            if (!day) return { error: 'Não identifiquei o dia (ex.: "dia 5", "5/10", "amanhã", "sexta").' };
             if (month !== null && (month < 1 || month > 12)) return { error: `Mês inválido: ${month}.` };
             if (month === null) { month = viewingMonth; if (!year) year = viewingYear; }
             if (!year) {
@@ -1203,20 +1703,54 @@
             return { day, month, year };
         }
 
-        const LOC_STOP = String.raw`(?=\s+(?:dia|das|do\s+dia|de\s+\d|as\s+\d|a\s+partir|com|para|pra|ate|inicio|comeca|comecando|entrada|hoje|amanha|depois|plantao|exame)\b|\s*[,;.]|\s+\d|$)`;
+        // Tipo falado: plantão, exame, cliente ou outro compromisso
+        function detectType(base) {
+            if (/\b(exames?|ultrassom|ultrassons|ultrassonografias?|ecografias?|laudos?)\b/.test(base)) return 'exame';
+            if (/\b(plantao|plantoes|sobreaviso)\b/.test(base)) return 'plantao';
+            if (/\b(clientes?|visita|reuniao|comercial)\b/.test(base)) return 'cliente';
+            if (/\b(pessoal|particular|compromisso|outro|outra)\b/.test(base)) return 'outro';
+            return null;
+        }
+
+        const LOC_STOP = String.raw`(?=\s+(?:dia|das|do\s+dia|de\s+\d|as\s+\d|a\s+partir|com|para|pra|ate|inicio|comeca|comecando|entrada|hoje|amanha|depois|plantao|plantoes|exames?|cliente|visita|reuniao|domingo|segunda|terca|quarta|quinta|sexta|sabado|realizando|fazendo)\b|\s*[,;.]|\s+\d|$)`;
         const CONNECTORS = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
         const GENERIC_LOC_WORDS = new Set(['hospital', 'clinica', 'pronto', 'atendimento', 'unidade', 'posto', 'centro', 'upa', 'pa', 'ps', 'municipal', 'regional']);
 
-        // Encontra o local citado: aceita parte do nome ("Planalto" -> "Pronto Atendimento Municipal Planalto")
+        // 3 = igual, 2 = prefixo, 1 = parecido (erros de voz: "jabuticaba" ~ "jaboticaba"), 0 = diferente
+        function tokenMatch(w, x) {
+            if (x === w) return 3;
+            if (w.length >= 4 && x.startsWith(w)) return 2;
+            if (w.length >= 5 && Math.abs(w.length - x.length) <= 2 && levenshtein(w, x) <= (w.length >= 8 ? 2 : 1)) return 1;
+            return 0;
+        }
+        function scoreLocation(ct, loc) {
+            const lt = tokens(loc.name).concat(tokens(loc.city));
+            let total = 0;
+            for (const w of ct) {
+                const best = Math.max(0, ...lt.map(x => tokenMatch(w, x)));
+                if (!best) { total = 0; break; }
+                total += best;
+            }
+            if (total) return total;
+            // Palavras juntas: "radio plan" ~ "radiplan"
+            if (ct.length > 1) {
+                const cj = ct.join('');
+                if (cj.length >= 6 && lt.some(x => levenshtein(cj, x) <= 2)) return 2;
+            }
+            return 0;
+        }
+
+        // Encontra o local citado: aceita parte do nome, a cidade e pequenos erros de reconhecimento de voz
         function matchLocation(candidate) {
             const ct = tokens(candidate).filter(w => !CONNECTORS.has(w));
             if (!ct.length) return { match: null };
             const exact = locations.filter(l => norm(l.name).trim() === norm(candidate).trim());
             if (exact.length === 1) return { match: exact[0] };
-            const hits = locations.filter(l => { const lt = tokens(l.name); return ct.every(w => lt.some(x => x === w || (w.length >= 4 && x.startsWith(w)))); });
-            if (hits.length === 1) return { match: hits[0] };
-            if (hits.length > 1) return { ambiguous: hits };
-            return { match: null };
+            const scored = locations.map(l => ({ l, s: scoreLocation(ct, l) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s);
+            if (!scored.length) return { match: null };
+            const top = scored.filter(x => x.s === scored[0].s);
+            if (top.length === 1) return { match: top[0].l };
+            return { ambiguous: top.map(x => x.l) };
         }
 
         function resolveLocation(original, base) {
@@ -1232,9 +1766,9 @@
                 const first = phrase.split(/\s+/)[0];
                 if (!phrase || ['dr', 'dra', 'doutor', 'doutora'].includes(first) || MONTHS[first]) continue;
                 candidates.push({ phrase, start: startIdx, end: startIdx + cm[1].length });
+                markerRe.lastIndex = startIdx;
             }
             for (const c of candidates) {
-                // tenta a frase inteira e depois versões mais curtas ("planalto plantao noturno" -> "planalto")
                 const words = c.phrase.split(/\s+/);
                 for (let n = words.length; n >= 1; n--) {
                     const sub = words.slice(0, n).join(' ');
@@ -1244,9 +1778,12 @@
                     if (r.ambiguous) return { error: `Local ambíguo "${sub}": ${r.ambiguous.map(l => l.name).join(', ')}. Especifique melhor.` };
                 }
             }
-            // Sem marcador: procura o nome completo de algum local no texto
+            // Sem marcador: procura o nome completo (ou um nome característico) de algum local no texto
             const direct = locations.filter(l => base.includes(norm(l.name)));
             if (direct.length === 1) return { loc: direct[0], span: null };
+            const words = tokens(base);
+            const byWord = locations.filter(l => tokens(l.name).some(x => x.length >= 6 && !GENERIC_LOC_WORDS.has(x) && words.some(w => tokenMatch(w, x) >= 1 && w.length >= 5)));
+            if (byWord.length === 1) return { loc: byWord[0], span: null };
             if (candidates.length) {
                 const c = candidates[0];
                 const display = original.slice(c.start, c.end).trim().replace(/(^|\s)(\S)/g, (_, sp, ch) => sp + ch.toUpperCase());
@@ -1289,62 +1826,113 @@
 
             const profRes = resolveProfessional(base, locRes.span);
             if (profRes.error) return logAction(text, profRes.error, 'error');
-            let targetProf = profRes.prof || (currentViewProfId !== 0 ? professionals.find(p => p.id === currentViewProfId) : null);
+            const targetProf = profRes.prof || (currentViewProfId !== 0 ? professionals.find(p => p.id === currentViewProfId) : null)
+                || (authUser && authUser.role !== 'admin' ? professionals.find(p => p.id === authUser.profId) : null)
+                || (professionals.length === 1 ? professionals[0] : null);
             if (!targetProf) return logAction(text, `Profissional não identificado. Na Visão Geral, cite o nome (ex.: "...para Dr. Enrique").`, 'error');
             if (authUser && authUser.role !== 'admin' && targetProf.id !== authUser.profId) return logAction(text, 'Seu perfil só permite lançar na sua própria agenda.', 'error');
 
             const range = parseTimeRange(text);
+            const examMatch = t.match(/\b(\d{1,4})\s*(?:exames?|ultrassons?|ultrassonografias?|laudos?)\b/);
+            const examsCount = examMatch ? parseInt(examMatch[1], 10) : 0;
+            const durationOnly = range ? null : parseDurationOnly(t);
 
             // Só cria o local depois de validar todo o comando (evita locais órfãos/duplicados)
             let targetLoc = locRes.loc;
+            let createdLoc = false;
             if (!targetLoc) {
-                if (!confirm(`O local "${locRes.newName}" não está cadastrado. Criar novo local?`)) return logAction(text, 'Cancelado: local não cadastrado.', 'warn');
-                targetLoc = addNewLocation(locRes.newName, { silent: true });
+                const city = prompt(`O local "${locRes.newName}" não está cadastrado.\nPara criar, confirme a cidade (com estado):`, `${locRes.newName}${stateSuffix() ? ' - ' + stateSuffix() : ''}`);
+                if (city === null) return logAction(text, 'Cancelado: local não cadastrado.', 'warn');
+                targetLoc = addNewLocation(locRes.newName, { silent: true, city: city.trim() });
+                createdLoc = true;
             }
-            const type = /\bexames?\b/.test(base) ? 'exame' : /\bplantao\b/.test(base) ? 'plantao' : (targetLoc.locType || 'plantao');
+            const type = examsCount ? 'exame' : (detectType(base) || targetLoc.locType || 'plantao');
 
             const segments = range ? splitByMidnight(range.startMin, range.durationMin) : [null];
-            const planned = segments.map(seg => {
+            const groupId = segments.length > 1 ? newId() : null;
+            const planned = segments.map((seg, idx) => {
                 const d = new Date(date.year, date.month - 1, date.day + (seg ? seg.dayOffset : 0));
-                return { seg, date: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear() };
+                const ev = {
+                    id: newId(), profId: targetProf.id, locId: targetLoc.id,
+                    date: d.getDate(), month: d.getMonth() + 1, year: d.getFullYear(),
+                    text: seg ? `das ${fmtMin(seg.startMin)} às ${fmtMin(seg.endMin)}` : (durationOnly ? `${TYPES[type].label} de ${durationOnly}h (horário a definir)` : (/\baviso\b/.test(base) ? `Aviso via ${source}` : `${TYPES[type].label} (horário a definir)`)),
+                    type, hours: seg ? Math.round((seg.endMin - seg.startMin) / 60 * 100) / 100 : (durationOnly || 0),
+                    examsCount: idx === 0 ? examsCount : 0
+                };
+                if (seg) { ev.startMin = seg.startMin; ev.endMin = seg.endMin; }
+                if (groupId) ev.groupId = groupId;
+                return ev;
             });
 
+            // Choques de horário e de deslocamento (considera a distância entre os locais)
             if (range) {
-                const conflicts = planned.flatMap(p => findConflicts(targetProf.id, p.year, p.month, p.date, p.seg.startMin, p.seg.endMin));
-                if (conflicts.length) {
-                    const desc = [...new Set(conflicts)].map(c => `${fmtDate(c)} - ${(locations.find(l => l.id === c.locId) || {}).name || 'Local'}: ${c.text}`).join('\n');
-                    if (!confirm(`Conflito de horário para ${targetProf.name}:\n${desc}\n\nLançar mesmo assim?`)) return logAction(text, 'Cancelado por conflito de horário.', 'warn');
+                const relevant = events.filter(e => e.profId === targetProf.id);
+                const issues = analyzeSchedule(relevant.concat(planned));
+                const msgs = [...new Set(planned.flatMap(p => (issues.get(p.id) || []).map(i => i.msg)))];
+                if (msgs.length && !confirm(`Atenção para ${targetProf.name}:\n\n${msgs.join('\n\n')}\n\nLançar mesmo assim?`)) {
+                    if (createdLoc) locations = locations.filter(l => l.id !== targetLoc.id);
+                    saveData();
+                    return logAction(text, 'Cancelado: ' + msgs[0], 'warn');
                 }
             }
 
-            const groupId = planned.length > 1 ? newId() : null;
-            planned.forEach(p => {
-                const ev = {
-                    id: newId(), profId: targetProf.id, locId: targetLoc.id,
-                    date: p.date, month: p.month, year: p.year,
-                    text: p.seg ? `das ${fmtMin(p.seg.startMin)} às ${fmtMin(p.seg.endMin)}` : (/\baviso\b/.test(base) ? `Aviso via ${source}` : 'Plantão (horário a definir)'),
-                    type, hours: p.seg ? Math.round((p.seg.endMin - p.seg.startMin) / 60 * 100) / 100 : 0, examsCount: 0
-                };
-                if (p.seg) { ev.startMin = p.seg.startMin; ev.endMin = p.seg.endMin; }
-                if (groupId) ev.groupId = groupId;
-                events.push(ev);
-            });
-
+            events.push(...planned);
             targetLoc.expanded = true;
             viewingMonth = date.month; viewingYear = date.year;
             if (currentViewProfId !== 0 && currentViewProfId !== targetProf.id) currentViewProfId = targetProf.id;
-            const totalH = range ? fmtHours(range.durationMin / 60) + 'h' : 'sem horário (informe as horas)';
             saveData();
-            logAction(text, `Salvo: ${targetProf.name} — ${pad2(date.day)}/${pad2(date.month)}/${date.year} em ${targetLoc.name} (${totalH}${planned.length > 1 ? ', dividido na meia-noite' : ''})`, range ? 'ok' : 'warn');
+            if (createdLoc && !validCoord(targetLoc.lat, targetLoc.lng)) autoGeocodeLocation(targetLoc);
+
+            const details = [];
+            if (range) details.push(`${fmtHours(range.durationMin / 60)}h${planned.length > 1 ? ', dividido na meia-noite' : ''}`);
+            else if (durationOnly) details.push(`${durationOnly}h, sem horário de início`);
+            else details.push('sem horário');
+            if (type === 'exame') details.push(examsCount ? `${examsCount} exame(s)` : 'informe o nº de exames');
+            const value = planned.reduce((s, e) => s + eventValue(e), 0);
+            if (value) details.push(fmtMoney(value));
+            const incomplete = (!range && !durationOnly && type !== 'cliente' && type !== 'outro') || (type === 'exame' && !examsCount);
+            logAction(text, `Salvo: ${TYPES[type].label} · ${targetProf.name} — ${pad2(date.day)}/${pad2(date.month)}/${date.year} em ${targetLoc.name} (${details.join(' · ')})${createdLoc ? ' · novo local: cadastre os valores no ⚙' : ''}`, incomplete ? 'warn' : 'ok');
         }
 
         function logAction(transcript, resultStr, status = 'ok') {
             voiceLogs.unshift({ time: new Date().toLocaleTimeString('pt-BR'), transcript: String(transcript), resultStr: String(resultStr), status });
             if (voiceLogs.length > 10) voiceLogs.length = 10;
             saveData(); renderApp();
+            showToast(resultStr, status);
         }
+
+        let toastTimer = null;
+        function showToast(msg, status) {
+            let el = document.getElementById('toast');
+            if (!el) {
+                el = document.createElement('div'); el.id = 'toast';
+                el.className = 'fixed left-1/2 -translate-x-1/2 bottom-24 z-[60] max-w-[92vw] md:max-w-xl px-4 py-3 rounded-lg shadow-xl text-sm text-white';
+                document.body.appendChild(el);
+            }
+            el.style.transform = 'translateX(-50%)';
+            el.className = el.className.replace(/bg-\S+/g, '') + ' ' + ({ ok: 'bg-emerald-700', warn: 'bg-amber-600', error: 'bg-red-700' }[status] || 'bg-gray-800');
+            el.textContent = msg;
+            el.classList.remove('hidden');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.add('hidden'), 6000);
+        }
+
+        // Vários compromissos numa mesma fala: "... e depois ...", "...; ..."
+        function handleCommand(text, source) {
+            const parts = String(text || '').split(/\s*(?:;|\n|\be depois\b|\bdepois\b|\be em seguida\b|\be também\b)\s*/i).map(p => p.trim()).filter(p => p.length > 3);
+            if (parts.length <= 1) return parseNaturalLanguage(text, source);
+            let lastDate = null;
+            parts.forEach(part => {
+                const d = parseDateFromText(wordsToDigits(norm(part)));
+                // Trecho sem data herda a data do anterior ("... e depois em Planalto das 21 às 23")
+                if (d.error && lastDate) part = `dia ${lastDate.day}/${lastDate.month}/${lastDate.year} ${part}`;
+                else if (!d.error) lastDate = d;
+                parseNaturalLanguage(part, source);
+            });
+        }
+
         function handleTextCommandSubmit(e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); processTextInput(); } }
-        function processTextInput() { const inputEl = document.getElementById('nlp-text-input'); const text = inputEl.value.trim(); if (text) { inputEl.value = ''; parseNaturalLanguage(text, "Texto"); } }
+        function processTextInput() { const inputEl = document.getElementById('nlp-text-input'); const text = inputEl.value.trim(); if (text) { inputEl.value = ''; handleCommand(text, "Texto"); } }
 
         function handleAttachment(input) {
             const file = input.files && input.files[0];
@@ -1353,38 +1941,47 @@
         }
 
         // =========================================================================
-        // RECONHECIMENTO DE VOZ (MICROFONE)
+        // RECONHECIMENTO DE VOZ: toque, fale e ele agenda ao terminar de falar
         // =========================================================================
-        let recognitionInstance = null; let isListening = false; let voiceStarting = false; let recognitionTimeout = null;
-        let finalVoiceTranscript = '';
+        let recognitionInstance = null; let isListening = false; let voiceStarting = false; let recognitionTimeout = null; let silenceTimer = null;
+        let finalVoiceTranscript = '', interimVoiceTranscript = '';
+        const SILENCE_MS = 2500;
 
         function setMicUi(active) {
             const btn = document.getElementById('fab-record'); const icon = btn.querySelector('i');
             btn.classList.toggle('bg-red-600', active);
             btn.classList.toggle('bg-pokulai-brand', !active);
             btn.classList.toggle('animate-pulse', active);
-            icon.className = active ? 'fas fa-wave-square text-2xl' : 'fas fa-microphone text-xl';
+            icon.className = active ? 'fas fa-wave-square text-2xl' : 'fas fa-microphone text-2xl';
+            const input = document.getElementById('nlp-text-input');
+            input.placeholder = active ? 'Ouvindo... fale o compromisso' : 'Ex: Plantão dia 5 em Jaboticaba das 7 às 7 · Exame dia 6 na Radiplan 20 exames';
         }
 
         function toggleVoiceCommand() {
             if (isListening || voiceStarting) { try { recognitionInstance && recognitionInstance.stop(); } catch (e) { /* ignora */ } return; }
             if (!recognitionInstance) {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if (!SpeechRecognition) { alert("Este navegador não suporta reconhecimento de voz. Use o Google Chrome ou Edge."); return; }
+                if (!SpeechRecognition) { alert("Este navegador não suporta reconhecimento de voz. Use o Google Chrome (Android/computador) ou o Safari atualizado (iPhone)."); return; }
                 recognitionInstance = new SpeechRecognition();
                 recognitionInstance.lang = 'pt-BR';
                 recognitionInstance.continuous = true;
-                recognitionInstance.interimResults = false;
+                recognitionInstance.interimResults = true;
 
                 recognitionInstance.onstart = function () {
                     isListening = true; voiceStarting = false;
-                    finalVoiceTranscript = '';
+                    finalVoiceTranscript = ''; interimVoiceTranscript = '';
                     setMicUi(true);
                     recognitionTimeout = setTimeout(() => { if (isListening && recognitionInstance) recognitionInstance.stop(); }, 60000);
                 };
                 recognitionInstance.onresult = function (event) {
-                    // Reconstrói a partir de todos os resultados finais (evita duplicação no Chrome Android)
-                    finalVoiceTranscript = Array.from(event.results).filter(r => r.isFinal).map(r => r[0].transcript.trim()).join(' ');
+                    // Reconstrói a partir de todos os resultados (evita duplicação no Chrome Android)
+                    const all = Array.from(event.results);
+                    finalVoiceTranscript = all.filter(r => r.isFinal).map(r => r[0].transcript.trim()).join(' ');
+                    interimVoiceTranscript = all.filter(r => !r.isFinal).map(r => r[0].transcript.trim()).join(' ');
+                    document.getElementById('nlp-text-input').value = (finalVoiceTranscript + ' ' + interimVoiceTranscript).trim();
+                    // Encerra sozinho após alguns segundos de silêncio
+                    clearTimeout(silenceTimer);
+                    silenceTimer = setTimeout(() => { if (isListening) recognitionInstance.stop(); }, SILENCE_MS);
                 };
                 recognitionInstance.onerror = function (event) {
                     const msgs = { 'not-allowed': 'Permissão do microfone negada.', 'service-not-allowed': 'Reconhecimento de voz bloqueado pelo navegador.', 'no-speech': 'Nenhuma fala detectada.', 'audio-capture': 'Nenhum microfone encontrado.', 'network': 'Falha de rede no reconhecimento de voz.' };
@@ -1392,11 +1989,12 @@
                 };
                 recognitionInstance.onend = function () {
                     isListening = false; voiceStarting = false;
-                    clearTimeout(recognitionTimeout);
+                    clearTimeout(recognitionTimeout); clearTimeout(silenceTimer);
                     setMicUi(false);
-                    const text = finalVoiceTranscript.trim();
-                    finalVoiceTranscript = '';
-                    if (text.length > 0) parseNaturalLanguage(text, "Voz");
+                    const text = (finalVoiceTranscript || interimVoiceTranscript).trim();
+                    finalVoiceTranscript = ''; interimVoiceTranscript = '';
+                    document.getElementById('nlp-text-input').value = '';
+                    if (text.length > 0) handleCommand(text, "Voz");
                 };
             }
             voiceStarting = true;
@@ -1405,68 +2003,22 @@
         }
 
         // =========================================================================
-        // EXPORTAÇÕES GERAIS (EXCEL, WORD, PDF PADRÃO) — mês exibido no calendário
+        // EXPORTAÇÕES DO MÊS EXIBIDO (menu flutuante)
         // =========================================================================
-        function getTableDataForExport() {
-            const profEvents = events.filter(e => e.month === viewingMonth && e.year === viewingYear && (currentViewProfId === 0 || e.profId === currentViewProfId));
-            profEvents.sort((a, b) => a.date - b.date || (eventInterval(a)?.[0] ?? 0) - (eventInterval(b)?.[0] ?? 0));
-            return profEvents.map(e => {
-                const loc = locations.find(l => l.id === e.locId); const prof = professionals.find(p => p.id === e.profId);
-                const row = { Data: fmtDate(e) };
-                if (currentViewProfId === 0) row.Profissional = prof ? prof.name : 'N/D';
-                Object.assign(row, { Local: loc ? loc.name : 'N/D', Tipo: e.type === 'exame' ? 'Exame' : 'Plantão', Horario: e.text, Horas: parseFloat(e.hours) || 0, Exames: parseInt(e.examsCount, 10) || 0 });
-                return row;
-            });
-        }
-
-        function getReportFileName(ext) {
-            const prof = professionals.find(p => p.id === currentViewProfId);
-            const base = currentViewProfId === 0 || !prof ? 'Equipe' : safeFileName(prof.name);
-            return `Relatorio_${base}_${pad2(viewingMonth)}_${viewingYear}.${ext}`;
-        }
-
-        function exportToExcel() {
-            const data = getTableDataForExport(); if (data.length === 0) return alert("Não há lançamentos no mês exibido para exportar.");
-            if (!window.XLSX) return alert('Biblioteca de Excel não carregada (verifique a conexão).');
-            const ws = XLSX.utils.json_to_sheet(data); const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Agenda"); XLSX.writeFile(wb, getReportFileName('xlsx'));
-        }
+        function viewReport() { return computeReport(currentViewProfId, viewingMonth, viewingYear); }
+        function exportToExcel() { const r = viewReport(); if (!r.list.length) return alert("Não há lançamentos no mês exibido para exportar."); exportReportExcel(r); }
+        function exportToPDF() { const r = viewReport(); if (!r.list.length) return alert("Não há lançamentos no mês exibido para exportar."); exportReportPDF(r); }
+        function exportTripsCSV() { const r = viewReport(); if (!r.list.length) return alert("Não há lançamentos no mês exibido para exportar."); exportLegsCSV(r); }
 
         function exportToWord() {
-            const data = getTableDataForExport(); if (data.length === 0) return alert("Não há lançamentos no mês exibido para exportar.");
-            const team = currentViewProfId === 0;
-            let html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório PokulAI</title></head><body><h1 style="color: #1E3A8A; font-family: sans-serif;">Pokul<span style="color: #0F766E">AI.com</span></h1><h2>Relatório de Plantões e Exames - ${monthNames[viewingMonth - 1]}/${viewingYear}</h2><table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%; font-family: sans-serif;"><tr style="background-color: #0F766E; color: white;"><th>Data</th>${team ? '<th>Profissional</th>' : ''}<th>Local</th><th>Tipo</th><th>Horário</th><th>Horas</th><th>Exames</th></tr>`;
-            data.forEach(r => { html += `<tr><td>${esc(r.Data)}</td>${team ? `<td>${esc(r.Profissional)}</td>` : ''}<td>${esc(r.Local)}</td><td>${esc(r.Tipo)}</td><td>${esc(r.Horario)}</td><td>${fmtHours(r.Horas)}</td><td>${r.Exames}</td></tr>`; });
+            const r = viewReport(); if (!r.list.length) return alert("Não há lançamentos no mês exibido para exportar.");
+            const team = r.team;
+            let html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Relatório PokulAI</title></head><body style="font-family: sans-serif;"><h1 style="color: #1E3A8A;">Pokul<span style="color: #0F766E">AI.com</span></h1><h2>Relatório - ${monthNames[r.month - 1]}/${r.year} - ${esc(reportTitle(r))}</h2>`;
+            html += `<p><b>Plantões:</b> ${r.totals.plantaoKeys.size} (${fmtHours(r.totals.plantaoHours)} h) · <b>Exames:</b> ${r.totals.exams} · <b>Faturamento estimado:</b> ${fmtMoney(r.revenue)} · <b>Deslocamento:</b> ${fmtKm(r.totals.km)}</p><ul>${r.insights.map(i => `<li>${esc(i.text)}</li>`).join('')}</ul>`;
+            html += `<table border="1" cellpadding="5" style="border-collapse: collapse; width: 100%;"><tr style="background-color: #0F766E; color: white;"><th>Data</th>${team ? '<th>Profissional</th>' : ''}<th>Local</th><th>Cidade</th><th>Tipo</th><th>Horário</th><th>Horas</th><th>Exames</th><th>Valor</th></tr>`;
+            eventRows(r).forEach(x => { html += `<tr><td>${fmtDate(x.e)}</td>${team ? `<td>${esc(x.prof ? x.prof.name : '')}</td>` : ''}<td>${esc(x.loc.name)}</td><td>${esc(x.loc.city || '')}</td><td>${TYPES[x.e.type].label}</td><td>${esc(x.e.text)}</td><td>${x.e.type === 'plantao' ? fmtHours(x.e.hours) : '-'}</td><td>${x.e.type === 'exame' ? x.e.examsCount : '-'}</td><td>${x.value ? fmtMoney(x.value) : '-'}</td></tr>`; });
             html += `</table></body></html>`;
-            const blob = new Blob(['﻿', html], { type: 'application/msword' });
-            const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = getReportFileName('doc');
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
-
-        function exportToPDF() {
-            const data = getTableDataForExport(); if (data.length === 0) return alert("Não há lançamentos no mês exibido para exportar.");
-            const doc = getJsPDF(); if (!doc) return;
-            const team = currentViewProfId === 0;
-            const prof = professionals.find(p => p.id === currentViewProfId);
-            const tealColor = [15, 118, 110]; const blueColor = [30, 58, 138];
-            doc.setFont("helvetica", "bold"); doc.setFontSize(22);
-            doc.setTextColor(blueColor[0], blueColor[1], blueColor[2]); doc.text("Pokul", 14, 20);
-            doc.setTextColor(tealColor[0], tealColor[1], tealColor[2]); doc.text("AI.com", 14 + doc.getTextWidth("Pokul"), 20);
-            doc.setFontSize(14); doc.setTextColor(50, 50, 50); doc.text(team ? "Visão Geral da Equipe" : "Relatório de Plantões e Exames", 196, 20, { align: "right" });
-            doc.setDrawColor(200, 200, 200); doc.line(14, 25, 196, 25);
-            doc.setFontSize(12); doc.setTextColor(30, 30, 30);
-            if (team || !prof) { doc.text(`Relatório Consolidado de Toda a Equipe`, 14, 35); }
-            else { doc.text(`Profissional: ${prof.name}`, 14, 35); doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.text(`Especialidade / Função: ${prof.spec || 'Não informada'}`, 14, 40); }
-            doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-            const introText = `Escala registrada para ${monthNames[viewingMonth - 1]} de ${viewingYear}, conforme lançamentos na agenda PokulAI.`;
-            doc.text(doc.splitTextToSize(introText, 182), 14, 50, { align: "justify", maxWidth: 182 });
-            let totalH = 0; let totalE = 0;
-            const tableRows = data.map(r => { totalH += r.Horas; totalE += r.Exames; const base = [r.Data]; if (team) base.push(r.Profissional); return base.concat([r.Local, r.Tipo, r.Horario, fmtHours(r.Horas) + 'h', r.Exames]); });
-            const head = team ? ['Data', 'Profissional', 'Local', 'Tipo', 'Horário', 'Horas', 'Exames'] : ['Data', 'Local', 'Tipo', 'Horário', 'Horas', 'Exames'];
-            const foot = team ? ['', '', '', '', 'TOTAIS:', fmtHours(totalH) + 'h', totalE] : ['', '', '', 'TOTAIS:', fmtHours(totalH) + 'h', totalE];
-            doc.autoTable({ startY: 60, margin: { bottom: 15 }, head: [head], body: tableRows, foot: [foot], showFoot: 'lastPage', headStyles: { fillColor: tealColor, textColor: 255, fontStyle: 'bold' }, footStyles: { fillColor: blueColor, textColor: 255, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [245, 248, 250] }, styles: { font: 'helvetica', fontSize: 9, cellPadding: 3 }, theme: 'grid' });
-            doc.save(getReportFileName('pdf'));
+            downloadBlob(new Blob(['﻿', html], { type: 'application/msword' }), reportFileName(r, 'doc'));
         }
 
         // =========================================================================
@@ -1502,18 +2054,74 @@
             saveData(); renderApp();
         }
         function toggleLocation(locId) { const loc = locations.find(l => l.id === locId); if (loc) { loc.expanded = !loc.expanded; saveData(); renderApp(); } }
-        function addNewLocation(name = "Novo Local", { silent = false } = {}) {
+        function addNewLocation(name = "Novo Local", { silent = false, city = '', lat = null, lng = null, locType = 'plantao', hourlyRate = 0, examRate = 0 } = {}) {
             // Cores ainda não usadas têm prioridade, para facilitar a leitura do calendário
             const used = new Set(locations.map(l => l.dotColor));
             const free = colorPalette.filter(c => !used.has(c.dot));
             const pool = free.length ? free : colorPalette;
             const color = pool[Math.floor(Math.random() * pool.length)];
-            const newLoc = { id: newId(), name: String(name).trim() || 'Novo Local', locType: 'plantao', colorClass: color.bg, dotColor: color.dot, expanded: true };
+            const newLoc = { id: newId(), name: String(name).trim() || 'Novo Local', city: String(city || '').trim(), lat: validCoord(lat, lng) ? lat : null, lng: validCoord(lat, lng) ? lng : null, locType: normType(locType), colorClass: color.bg, dotColor: color.dot, expanded: true, hourlyRate, examRate };
             locations.push(newLoc);
             saveData();
             if (!silent) renderApp();
             return newLoc;
         }
+
+        // ---- Modal de local ----
+        let editingLocId = null;
+        function openLocationModal(locId) {
+            editingLocId = locId;
+            const loc = locations.find(l => l.id === locId) || { name: '', city: stateSuffix() ? ` - ${stateSuffix()}` : '', lat: null, lng: null, locType: 'plantao', hourlyRate: 0, examRate: 0 };
+            document.getElementById('loc-modal-title').innerHTML = `<i class="fas fa-hospital text-pokulai-brand mr-2"></i> ${locId ? 'Editar local' : 'Novo local'}`;
+            document.getElementById('loc-name').value = loc.name;
+            document.getElementById('loc-city').value = loc.city.trim() === `- ${stateSuffix()}` ? '' : loc.city;
+            document.getElementById('loc-lat').value = loc.lat ?? '';
+            document.getElementById('loc-lng').value = loc.lng ?? '';
+            document.getElementById('loc-type').innerHTML = typeOptions(loc.locType);
+            document.getElementById('loc-hourly').value = loc.hourlyRate || '';
+            document.getElementById('loc-exam').value = loc.examRate || '';
+            document.getElementById('loc-geo-status').innerText = validCoord(loc.lat, loc.lng) ? 'Localização cadastrada.' : 'Sem localização: clique em "Localizar" para buscar a cidade no mapa.';
+            document.getElementById('loc-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('loc-name').focus(), 50);
+        }
+        function closeLocationModal() { document.getElementById('loc-modal').classList.add('hidden'); }
+        async function geocodeLocModal() {
+            const status = document.getElementById('loc-geo-status');
+            const q = document.getElementById('loc-city').value.trim() || document.getElementById('loc-name').value.trim();
+            if (!q) return alert('Informe a cidade.');
+            status.innerText = 'Buscando no mapa...';
+            try {
+                const g = await geocodeCity(q);
+                if (!g) { status.innerText = 'Cidade não encontrada. Confira o nome ou informe as coordenadas manualmente.'; return; }
+                document.getElementById('loc-lat').value = g.lat; document.getElementById('loc-lng').value = g.lng;
+                status.innerText = 'Encontrado: ' + g.label;
+            } catch (e) { status.innerText = 'Sem conexão com o serviço de mapas. Informe as coordenadas manualmente.'; }
+        }
+        function saveLocationModal() {
+            const name = document.getElementById('loc-name').value.replace(/\s+/g, ' ').trim();
+            if (!name) return alert('Informe o nome do local.');
+            const lat = parseNum(document.getElementById('loc-lat').value), lng = parseNum(document.getElementById('loc-lng').value);
+            if ((lat !== null || lng !== null) && !validCoord(lat, lng)) return alert('Coordenadas inválidas.');
+            const data = {
+                name, city: document.getElementById('loc-city').value.replace(/\s+/g, ' ').trim(),
+                lat: validCoord(lat, lng) ? lat : null, lng: validCoord(lat, lng) ? lng : null,
+                locType: normType(document.getElementById('loc-type').value),
+                hourlyRate: Math.max(0, parseNum(document.getElementById('loc-hourly').value) || 0),
+                examRate: Math.max(0, parseNum(document.getElementById('loc-exam').value) || 0)
+            };
+            const loc = locations.find(l => l.id === editingLocId);
+            if (loc) {
+                const typeChanged = loc.locType !== data.locType;
+                Object.assign(loc, data);
+                if (typeChanged) applyLocationTypeToEvents(loc);
+                saveData(); renderApp();
+            } else {
+                const created = addNewLocation(name, data);
+                if (!validCoord(created.lat, created.lng) && created.city) autoGeocodeLocation(created);
+            }
+            closeLocationModal();
+        }
+
         function updateLocationName(locId, newName) {
             const loc = locations.find(l => l.id === locId); if (!loc) return;
             const name = String(newName).replace(/\s+/g, ' ').trim();
@@ -1521,15 +2129,18 @@
             if (name === loc.name) return;
             loc.name = name; saveData(); renderApp();
         }
+        function applyLocationTypeToEvents(loc) {
+            const affected = events.filter(e => e.locId === loc.id && e.type !== loc.locType);
+            if (affected.length && confirm(`Aplicar o tipo "${TYPES[loc.locType].label}" também aos ${affected.length} lançamento(s) já existentes deste local (todos os meses e profissionais)?\n\nOK = alterar todos (afeta apurações passadas)\nCancelar = só os novos lançamentos usarão o novo tipo`)) {
+                affected.forEach(e => { e.type = loc.locType; });
+            }
+        }
         function updateLocationType(locId, type) {
             const loc = locations.find(l => l.id === locId); if (!loc) return;
-            type = type === 'exame' ? 'exame' : 'plantao';
+            type = normType(type);
             if (loc.locType === type) return;
             loc.locType = type;
-            const affected = events.filter(e => e.locId === locId && e.type !== type);
-            if (affected.length && confirm(`Aplicar o tipo "${type === 'exame' ? 'Exame' : 'Plantão'}" também aos ${affected.length} lançamento(s) já existentes deste local (todos os meses e profissionais)?\n\nOK = alterar todos (afeta apurações passadas)\nCancelar = só os novos lançamentos usarão o novo tipo`)) {
-                affected.forEach(e => { e.type = type; });
-            }
+            applyLocationTypeToEvents(loc);
             saveData(); renderApp();
         }
         function deleteLocation(locId) {
@@ -1560,7 +2171,7 @@
                 if (!(h >= 0 && h <= 24)) { alert('Horas inválidas: informe um valor entre 0 e 24.'); renderApp(); return; }
                 newVal = h;
             } else if (field === 'type') {
-                newVal = value === 'exame' ? 'exame' : 'plantao';
+                newVal = normType(value);
             } else if (field === 'text') {
                 newVal = String(value).replace(/\s+/g, ' ').trim();
                 if (!newVal) { renderApp(); return; }
@@ -1584,6 +2195,43 @@
             events = events.filter(e => !ids.includes(e.id)); saveData(); renderApp();
         }
 
+        // ---- Modal de configurações de deslocamento ----
+        function openSettingsModal() {
+            document.getElementById('set-base').value = settings.baseName;
+            document.getElementById('set-lat').value = settings.baseLat ?? '';
+            document.getElementById('set-lng').value = settings.baseLng ?? '';
+            document.getElementById('set-speed').value = settings.speedKmh;
+            document.getElementById('set-buffer').value = settings.bufferMin;
+            document.getElementById('set-cost').value = settings.costPerKm || '';
+            document.getElementById('set-routes').checked = settings.useRoutes;
+            document.getElementById('set-geo-status').innerText = basePoint() ? 'Base localizada.' : 'Base sem localização.';
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+        function closeSettingsModal() { document.getElementById('settings-modal').classList.add('hidden'); }
+        async function geocodeBase() {
+            const status = document.getElementById('set-geo-status');
+            const q = document.getElementById('set-base').value.trim();
+            if (!q) return alert('Informe a cidade base.');
+            status.innerText = 'Buscando no mapa...';
+            try {
+                const g = await geocodeCity(q);
+                if (!g) { status.innerText = 'Cidade não encontrada.'; return; }
+                document.getElementById('set-lat').value = g.lat; document.getElementById('set-lng').value = g.lng;
+                status.innerText = 'Encontrado: ' + g.label;
+            } catch (e) { status.innerText = 'Sem conexão com o serviço de mapas.'; }
+        }
+        function saveSettingsModal() {
+            const lat = parseNum(document.getElementById('set-lat').value), lng = parseNum(document.getElementById('set-lng').value);
+            if ((lat !== null || lng !== null) && !validCoord(lat, lng)) return alert('Coordenadas da base inválidas.');
+            settings = sanitizeSettings(Object.assign({}, settings, {
+                baseName: document.getElementById('set-base').value.trim(), baseLat: lat, baseLng: lng,
+                speedKmh: document.getElementById('set-speed').value, bufferMin: document.getElementById('set-buffer').value,
+                costPerKm: document.getElementById('set-cost').value, useRoutes: document.getElementById('set-routes').checked
+            }));
+            routeFailed.clear();
+            saveData(); closeSettingsModal(); renderApp();
+        }
+
         // Teclas em campos editáveis: Enter confirma, Esc desfaz
         function editableKey(e, el) {
             if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
@@ -1591,8 +2239,15 @@
         }
 
         // =========================================================================
-        // RENDERIZAÇÃO PRINCIPAL DO CALENDÁRIO
+        // RENDERIZAÇÃO PRINCIPAL (calendário, lista e barra lateral)
         // =========================================================================
+        function issueBadge(list) {
+            if (!list || !list.length) return '';
+            const title = list.map(i => i.msg).join('\n');
+            const icon = list.some(i => i.kind === 'overlap') ? 'fa-circle-xmark' : 'fa-car-burst';
+            return `<i class="fas ${icon} text-red-200 ml-1" title="${esc(title)}"></i>`;
+        }
+
         function renderApp() {
             if (currentViewProfId !== 0 && !professionals.some(p => p.id === currentViewProfId)) currentViewProfId = 0;
             const profById = new Map(professionals.map(p => [p.id, p]));
@@ -1624,38 +2279,46 @@
             nameEl.innerText = currentViewProfId === 0 ? "Visão Geral (Equipe)" : (cp ? cp.name : '');
             badgeEl.classList.remove('hidden'); badgeEl.classList.add('flex');
 
-            const currentEvents = events.filter(e => e.month === viewingMonth && e.year === viewingYear && (currentViewProfId === 0 || e.profId === currentViewProfId));
+            const inView = e => currentViewProfId === 0 || e.profId === currentViewProfId;
+            const currentEvents = events.filter(e => e.month === viewingMonth && e.year === viewingYear && inView(e));
+            const issues = analyzeSchedule(events.filter(inView));
+            const sortByTime = (a, b) => (eventInterval(a)?.[0] ?? 0) - (eventInterval(b)?.[0] ?? 0);
 
             let legendHtml = '';
             locations.forEach((loc) => {
-                const locEvents = currentEvents.filter(e => e.locId === loc.id).sort((a, b) => a.date - b.date);
+                const locEvents = currentEvents.filter(e => e.locId === loc.id).sort((a, b) => a.date - b.date || sortByTime(a, b));
                 if (currentViewProfId === 0 && locEvents.length === 0) return;
                 const eventsHtml = locEvents.map(e => {
                     const prof = profById.get(e.profId);
                     const profLabel = currentViewProfId === 0 ? `<div class="text-[9px] font-bold text-pokulai-brand dark:text-pokulai-accent mb-0.5"><i class="fas fa-user-md mr-1"></i>${esc(prof ? shortName(prof.name) : 'Profissional removido')}</div>` : '';
+                    const evIssues = issues.get(e.id) || [];
+                    const issueHtml = evIssues.length ? `<div class="mt-1 text-[10px] text-red-600 dark:text-red-400">${evIssues.map(i => `<div><i class="fas fa-triangle-exclamation mr-1"></i>${esc(i.msg)}</div>`).join('')}</div>` : '';
+                    const value = eventValue(e);
                     return `
-                        <li class="flex flex-col bg-gray-50 dark:bg-gray-700/50 p-2 rounded mb-2 group border-l-2 border-${loc.dotColor}-500">
+                        <li class="flex flex-col bg-gray-50 dark:bg-gray-700/50 p-2 rounded mb-2 group border-l-2 ${evIssues.length ? 'border-red-500' : `border-${loc.dotColor}-500`}">
                             <div class="flex items-start justify-between">
-                                <div class="flex-1 min-w-0">${profLabel}<span class="font-bold text-gray-700 dark:text-gray-300">Dia ${editable('', `updateEventField(${e.id}, 'date', this.innerText)`, e.date)}:</span>${editable('text-gray-600 dark:text-gray-400 block mt-1 break-words', `updateEventField(${e.id}, 'text', this.innerText)`, e.text)}</div>
+                                <div class="flex-1 min-w-0">${profLabel}<span class="font-bold text-gray-700 dark:text-gray-300">Dia ${editable('', `updateEventField(${e.id}, 'date', this.innerText)`, e.date)}:</span>${editable('text-gray-600 dark:text-gray-400 block mt-1 break-words', `updateEventField(${e.id}, 'text', this.innerText)`, e.text)}${value ? `<span class="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">${fmtMoney(value)}</span>` : ''}${issueHtml}</div>
                                 <button onclick="deleteEvent(${e.id})" class="text-red-400 hover:text-red-600 ml-2 opacity-40 group-hover:opacity-100 transition-opacity" title="Excluir lançamento"><i class="fas fa-trash text-xs"></i></button>
                             </div>
                             <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 flex space-x-2 text-[10px]">
-                                <select onchange="updateEventField(${e.id}, 'type', this.value)" class="bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded p-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-pokulai-brand"><option value="plantao" ${e.type === 'plantao' ? 'selected' : ''}>Plantão</option><option value="exame" ${e.type === 'exame' ? 'selected' : ''}>Exame</option></select>
+                                <select onchange="updateEventField(${e.id}, 'type', this.value)" class="bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded p-1 text-gray-700 dark:text-gray-300 focus:outline-none focus:border-pokulai-brand">${typeOptions(e.type)}</select>
                                 <div class="flex items-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-1" title="Horas"><span class="text-gray-400 font-bold px-1"><i class="far fa-clock"></i></span><input type="number" step="0.5" min="0" max="24" onchange="updateEventField(${e.id}, 'hours', this.value)" value="${Number(e.hours) || 0}" class="w-10 bg-transparent text-center focus:outline-none text-gray-700 dark:text-gray-300"></div>
                                 <div class="flex items-center bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded px-1" title="Quantidade de exames"><span class="text-gray-400 font-bold px-1"><i class="fas fa-file-medical"></i></span><input type="number" min="0" onchange="updateEventField(${e.id}, 'examsCount', this.value)" value="${Number(e.examsCount) || 0}" class="w-10 bg-transparent text-center focus:outline-none text-gray-700 dark:text-gray-300"></div>
                             </div>
                         </li>`;
                 }).join('');
                 const isExpanded = loc.expanded !== false; const bodyClass = isExpanded ? '' : 'hidden'; const chevronIcon = isExpanded ? 'fa-chevron-up' : 'fa-chevron-down';
+                const rateInfo = [loc.city, loc.hourlyRate ? `${fmtMoney(loc.hourlyRate)}/h` : '', loc.examRate ? `${fmtMoney(loc.examRate)}/exame` : '', validCoord(loc.lat, loc.lng) ? '' : 'sem localização'].filter(Boolean).join(' · ');
                 legendHtml += `
                     <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm bg-white dark:bg-gray-800 overflow-hidden text-gray-800 dark:text-gray-200">
                         <div class="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-700 select-none">
                             <div class="flex items-center cursor-pointer" onclick="toggleLocation(${loc.id})"><span class="w-3 h-3 rounded-full bg-${loc.dotColor}-500 mr-2 block"></span></div>
-                            ${editable('font-semibold flex-1 min-w-0 mr-2 break-words', `updateLocationName(${loc.id}, this.innerText)`, loc.name)}
-                            <select onchange="updateLocationType(${loc.id}, this.value)" class="text-[9px] uppercase font-bold bg-transparent border-b border-dashed border-gray-400 text-gray-500 dark:text-gray-400 focus:outline-none mr-2 cursor-pointer" title="Tipo padrão deste local"><option value="plantao" ${loc.locType !== 'exame' ? 'selected' : ''}>Plantão</option><option value="exame" ${loc.locType === 'exame' ? 'selected' : ''}>Exames</option></select>
+                            <div class="flex-1 min-w-0 mr-2">${editable('font-semibold break-words', `updateLocationName(${loc.id}, this.innerText)`, loc.name)}<div class="text-[9px] text-gray-500 dark:text-gray-400 px-1 truncate">${esc(rateInfo)}</div></div>
+                            <select onchange="updateLocationType(${loc.id}, this.value)" class="text-[9px] uppercase font-bold bg-transparent border-b border-dashed border-gray-400 text-gray-500 dark:text-gray-400 focus:outline-none mr-1 cursor-pointer" title="Tipo padrão deste local">${typeOptions(loc.locType)}</select>
                             <div class="flex items-center">
-                                <span class="text-[10px] bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded mr-2">${locEvents.length}</span>
-                                <button onclick="toggleLocation(${loc.id})" class="text-gray-500 dark:text-gray-400 hover:text-pokulai-brand mr-2 p-1"><i class="fas ${chevronIcon}"></i></button>
+                                <span class="text-[10px] bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded mr-1">${locEvents.length}</span>
+                                <button onclick="openLocationModal(${loc.id})" class="text-gray-500 dark:text-gray-400 hover:text-pokulai-brand p-1" title="Cidade, localização e valores"><i class="fas fa-cog"></i></button>
+                                <button onclick="toggleLocation(${loc.id})" class="text-gray-500 dark:text-gray-400 hover:text-pokulai-brand p-1"><i class="fas ${chevronIcon}"></i></button>
                                 <button onclick="deleteLocation(${loc.id})" class="text-gray-400 hover:text-red-500 p-1" title="Excluir local"><i class="fas fa-times"></i></button>
                             </div>
                         </div>
@@ -1672,6 +2335,13 @@
             if (voiceLogs.length === 0) voiceContainer.innerHTML = '<p class="text-gray-400 italic">Nenhum comando utilizado.</p>';
             else voiceContainer.innerHTML = voiceLogs.map(log => `<div class="bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700"><p class="text-gray-800 dark:text-gray-200 font-medium text-xs break-words">"${esc(log.transcript)}" <span class="text-[10px] text-gray-400">${esc(log.time)}</span></p><p class="text-gray-500 dark:text-gray-400 text-xs mt-1 break-words"><i class="fas ${statusIcon[log.status] || statusIcon.ok} mr-1"></i>${esc(log.resultStr)}</p></div>`).join('');
 
+            // Alterna entre calendário e lista
+            const isList = viewMode === 'list';
+            document.getElementById('calendar-view').classList.toggle('hidden', isList);
+            document.getElementById('list-view').classList.toggle('hidden', !isList);
+            document.getElementById('view-toggle-icon').className = `fas ${isList ? 'fa-calendar-alt' : 'fa-list'} text-gray-500 dark:text-gray-400 text-xl`;
+            if (isList) { renderList(currentEvents, issues, profById, locById); return; }
+
             const firstDay = new Date(viewingYear, viewingMonth - 1, 1).getDay();
             const totalDays = daysInMonth(viewingYear, viewingMonth);
             const now = new Date();
@@ -1679,34 +2349,74 @@
             let calHtml = emptyCell.repeat(firstDay);
 
             for (let day = 1; day <= totalDays; day++) {
-                const dayEvents = currentEvents.filter(e => e.date === day).sort((a, b) => (eventInterval(a)?.[0] ?? 0) - (eventInterval(b)?.[0] ?? 0));
+                const dayEvents = currentEvents.filter(e => e.date === day).sort(sortByTime);
                 const isCrowded = new Set(dayEvents.map(e => e.profId)).size >= 2;
+                const dayHasIssue = dayEvents.some(e => (issues.get(e.id) || []).length);
 
                 const eventsHtml = dayEvents.map(e => {
                     const loc = locById.get(e.locId);
                     if (!loc) return '';
-                    const typeBadge = e.type === 'exame' ? '<i class="fas fa-stethoscope mr-1"></i>' : '<i class="far fa-clock mr-1"></i>';
+                    const typeBadge = `<i class="${TYPES[e.type].icon} mr-1"></i>`;
                     const prof = profById.get(e.profId);
-                    const profNameHtml = prof ? `<span class="font-bold text-xs block text-white truncate pr-3" title="${esc(prof.name)}"><i class="fas fa-user-md mr-1"></i>${esc(shortName(prof.name))}</span>` : '';
+                    const evIssues = issues.get(e.id) || [];
+                    const profNameHtml = prof ? `<span class="font-bold text-xs block text-white truncate pr-3" title="${esc(prof.name)}"><i class="fas fa-user-md mr-1"></i>${esc(shortName(prof.name))}${issueBadge(evIssues)}</span>` : issueBadge(evIssues);
                     const toggleId = `cal-ev-${e.id}`;
                     const toggleAction = isCrowded ? `onclick="document.getElementById('${toggleId}').classList.toggle('hidden'); event.stopPropagation();"` : '';
                     const chevronHtml = isCrowded ? `<i class="fas fa-chevron-down text-[8px] absolute right-1.5 top-1.5 opacity-80"></i>` : '';
+                    const extra = e.type === 'exame' && e.examsCount ? ` · ${e.examsCount} exames` : '';
                     return `
-                    <div class="${loc.colorClass} text-white px-1.5 py-1.5 rounded mb-1 shadow-sm leading-tight relative overflow-hidden ${isCrowded ? 'cursor-pointer hover:opacity-90' : ''}" ${toggleAction}>
+                    <div class="${loc.colorClass} text-white px-1.5 py-1.5 rounded mb-1 shadow-sm leading-tight relative overflow-hidden ${evIssues.length ? 'ring-2 ring-red-500' : ''} ${isCrowded ? 'cursor-pointer hover:opacity-90' : ''}" ${toggleAction}>
                         ${chevronHtml}
                         ${profNameHtml}
                         <span class="font-normal text-[8px] block opacity-90 mt-0.5 tracking-wide truncate" title="${esc(loc.name)}">${typeBadge}${esc(loc.name)}</span>
-                        <div id="${toggleId}" class="${isCrowded ? 'hidden' : ''}"><span class="block text-[10px] mt-1 font-medium bg-black/10 px-1 py-0.5 rounded truncate" title="${esc(e.text)}">${esc(e.text)}</span></div>
+                        <div id="${toggleId}" class="${isCrowded ? 'hidden' : ''}"><span class="block text-[10px] mt-1 font-medium bg-black/10 px-1 py-0.5 rounded truncate" title="${esc(e.text + extra)}">${esc(e.text + extra)}</span></div>
                     </div>`;
                 }).join('');
 
                 const isToday = now.getDate() === day && now.getMonth() + 1 === viewingMonth && now.getFullYear() === viewingYear;
                 const dayStyle = isToday ? 'border-2 border-blue-400 bg-blue-50 dark:bg-blue-900/10' : 'border-b border-r border-gray-200 dark:border-gray-700';
-                calHtml += `<div class="calendar-day flex flex-col ${dayStyle}"><div class="text-right text-gray-500 dark:text-gray-400 font-bold mb-1">${day}</div><div class="flex-1 space-y-1">${eventsHtml}</div></div>`;
+                calHtml += `<div class="calendar-day flex flex-col ${dayStyle}"><div class="text-right font-bold mb-1 ${dayHasIssue ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}">${dayHasIssue ? '<i class="fas fa-triangle-exclamation mr-1 text-xs" title="Há choque de horário ou deslocamento neste dia"></i>' : ''}${day}</div><div class="flex-1 space-y-1">${eventsHtml}</div></div>`;
             }
             calHtml += emptyCell.repeat((7 - ((firstDay + totalDays) % 7)) % 7);
-            // Uma única atribuição: "innerHTML +=" em laço reprocessava a grade inteira a cada dia
             document.getElementById('calendar-body').innerHTML = calHtml;
+        }
+
+        // Lista do mês (melhor no celular): dias com compromissos, valores, alertas e trechos de viagem
+        function renderList(currentEvents, issues, profById, locById) {
+            const container = document.getElementById('list-view');
+            if (!currentEvents.length) { container.innerHTML = `<div class="text-center text-gray-400 italic p-8">Nenhum compromisso em ${monthNames[viewingMonth - 1]}.<br>Toque no microfone e diga, por exemplo:<br><b>"Plantão dia 5 em Jaboticaba das 7 às 7"</b></div>`; return; }
+            const now = new Date();
+            const days = [...new Set(currentEvents.map(e => e.date))].sort((a, b) => a - b);
+            let html = '';
+            days.forEach(day => {
+                const dayEvents = currentEvents.filter(e => e.date === day).sort((a, b) => (eventInterval(a)?.[0] ?? 0) - (eventInterval(b)?.[0] ?? 0));
+                const wd = weekdayNames[new Date(viewingYear, viewingMonth - 1, day).getDay()];
+                const isToday = now.getDate() === day && now.getMonth() + 1 === viewingMonth && now.getFullYear() === viewingYear;
+                html += `<div><div class="text-xs font-bold uppercase mb-1 ${isToday ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'}">${wd}, ${pad2(day)}/${pad2(viewingMonth)}${isToday ? ' · hoje' : ''}</div><div class="space-y-2">`;
+                let prevLoc = null;
+                dayEvents.forEach(e => {
+                    const loc = locById.get(e.locId);
+                    const prof = profById.get(e.profId);
+                    const evIssues = issues.get(e.id) || [];
+                    if (prevLoc && loc && prevLoc.id !== loc.id && currentViewProfId !== 0) {
+                        const tr = travelBetween(locPoint(prevLoc), locPoint(loc));
+                        if (tr) html += `<div class="text-[11px] text-gray-500 dark:text-gray-400 pl-3"><i class="fas fa-car mr-1"></i>${fmtKm(tr.km)} · ~${fmtDuration(tr.min)}${tr.source === 'estimativa' ? ' (estimado)' : ''}</div>`;
+                    }
+                    const value = eventValue(e);
+                    html += `<div class="flex items-stretch bg-gray-50 dark:bg-gray-700/50 rounded-lg overflow-hidden border ${evIssues.length ? 'border-red-400' : 'border-gray-200 dark:border-gray-700'}">
+                        <div class="w-1.5 ${loc ? loc.colorClass.split(' ')[0] : 'bg-gray-400'}"></div>
+                        <div class="flex-1 p-2 min-w-0">
+                            <div class="flex justify-between items-start"><span class="font-semibold text-gray-800 dark:text-gray-100 truncate"><i class="${TYPES[e.type].icon} mr-1 text-gray-400"></i>${esc(loc ? loc.name : 'Local removido')}</span>${value ? `<span class="text-xs font-bold text-emerald-700 dark:text-emerald-400 ml-2 whitespace-nowrap">${fmtMoney(value)}</span>` : ''}</div>
+                            <div class="text-xs text-gray-600 dark:text-gray-300">${esc(e.text)}${e.type === 'exame' ? ` · ${e.examsCount || '?'} exames` : ''}${loc && loc.city ? ` · ${esc(loc.city)}` : ''}${currentViewProfId === 0 && prof ? ` · <b>${esc(shortName(prof.name))}</b>` : ''}</div>
+                            ${evIssues.map(i => `<div class="text-[11px] text-red-600 dark:text-red-400 mt-1"><i class="fas fa-triangle-exclamation mr-1"></i>${esc(i.msg)}</div>`).join('')}
+                        </div>
+                        <button onclick="deleteEvent(${e.id})" class="px-3 text-gray-400 hover:text-red-500" title="Excluir"><i class="fas fa-trash text-xs"></i></button>
+                    </div>`;
+                    prevLoc = loc;
+                });
+                html += `</div></div>`;
+            });
+            container.innerHTML = html;
         }
 
         // =========================================================================
